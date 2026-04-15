@@ -59,8 +59,10 @@ class BleIntegrationTests {
             try { e.disconnect(p) } catch (_: Exception) {}
         }
         e.destroy()
-        // Short delay so BlueZ releases the adapter before the next test
-        delay(200)
+        // BlueZ needs time after disconnect before the next Connect() call
+        // will succeed. Without this, the follow-up test sees
+        // "le-connection-abort-by-local".
+        delay(2000)
     }
 
     private suspend fun waitForServices(p: BluetoothPeripheral, timeoutMs: Long) {
