@@ -14,3 +14,4 @@ dependencyResolutionManagement {
 }
 
 include(":engine")
+include(":integration-tests")
