@@ -11,6 +11,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify tag matches gradle.properties version
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF#refs/tags/}"
+          EXPECTED="${TAG#v}"
+          ACTUAL=$(grep '^version=' gradle.properties | cut -d= -f2)
+          if [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "::error::Tag $TAG expects version '$EXPECTED' but gradle.properties has '$ACTUAL'"
+            exit 1
+          fi
+          echo "Version check OK: $ACTUAL"
+
+      - name: Verify CHANGELOG has a released entry for this version
+        run: |
+          set -euo pipefail
+          VERSION=$(grep '^version=' gradle.properties | cut -d= -f2)
+          if ! grep -qE "^## \[${VERSION}\] - [0-9]{4}-[0-9]{2}-[0-9]{2}" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no dated '## [${VERSION}] - YYYY-MM-DD' entry"
+            exit 1
+          fi
+          echo "Changelog entry present for $VERSION"
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
