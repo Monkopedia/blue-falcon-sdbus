@@ -109,6 +109,39 @@ engine.notifyCharacteristic(device, char, notify = true)
 | `requestConnectionPriority` | ❌ | Linux kernel manages connection parameters |
 | `refreshGattCache` | ❌ | BlueZ has no GATT cache refresh; reconnect instead |
 
+## Troubleshooting
+
+### `le-connection-abort-by-local` on connect
+
+BlueZ occasionally rejects the first `Connect()` after a recent
+disconnect from the same process with
+`org.bluez.Error.Failed: le-connection-abort-by-local` — the kernel /
+controller hasn't fully released the previous link yet. In practice we
+see this fire on ~7% of back-to-back connects against the same
+peripheral.
+
+`SdbusEngine.connect` surfaces the error rather than hiding it, so
+consumers can decide their own retry policy. A single retry after a
+short backoff is almost always enough:
+
+```kotlin
+suspend fun connectWithRetry(
+    engine: SdbusEngine,
+    peripheral: BluetoothPeripheral,
+    attempts: Int = 3,
+) {
+    repeat(attempts) { i ->
+        try {
+            engine.connect(peripheral)
+            return
+        } catch (e: com.monkopedia.sdbus.Error) {
+            if (i == attempts - 1) throw e
+            kotlinx.coroutines.delay(1000L * (i + 1))
+        }
+    }
+}
+```
+
 ## Testing
 
 Integration tests run against the
