@@ -5,14 +5,25 @@ plugins {
 kotlin {
     jvmToolchain(17)
 
+    // libsystemd lives at /usr/lib on Arch and /usr/lib/<triple> on Debian /
+    // Ubuntu (multiarch). Include both so CI (ubuntu-latest) and Arch hosts
+    // both resolve the library. Nonexistent -L paths are silently ignored.
     linuxX64 {
         binaries.all {
-            linkerOpts("-L/usr/lib", "-lsystemd", "-lrt", "--allow-shlib-undefined")
+            linkerOpts(
+                "-L/usr/lib",
+                "-L/usr/lib/x86_64-linux-gnu",
+                "-lsystemd", "-lrt", "--allow-shlib-undefined",
+            )
         }
     }
     linuxArm64 {
         binaries.all {
-            linkerOpts("-lsystemd", "-lrt", "--allow-shlib-undefined")
+            linkerOpts(
+                "-L/usr/lib",
+                "-L/usr/lib/aarch64-linux-gnu",
+                "-lsystemd", "-lrt", "--allow-shlib-undefined",
+            )
         }
     }
 
