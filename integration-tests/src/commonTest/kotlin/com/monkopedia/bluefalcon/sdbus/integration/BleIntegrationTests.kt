@@ -44,11 +44,26 @@ class BleIntegrationTests {
         val found = h.scanForDevice(timeoutMs = 120_000L) { device ->
             device.name == BfTestConstants.DEVICE_NAME
         }
-        e.connect(found)
-        // BlueZ's connect returns once the link is up; autoDiscover kicks
-        // off service resolution and we wait for services to populate.
+        // BlueZ frequently answers the first Connect() after a recent
+        // disconnect with "le-connection-abort-by-local"; retry a few
+        // times with backoff before giving up.
+        connectWithRetry(e, found)
         waitForServices(found, timeoutMs = 15_000L)
         peripheral = found
+    }
+
+    private suspend fun connectWithRetry(e: SdbusEngine, p: BluetoothPeripheral) {
+        var lastError: Throwable? = null
+        repeat(4) { attempt ->
+            try {
+                e.connect(p)
+                return
+            } catch (t: Throwable) {
+                lastError = t
+                delay(1000L * (attempt + 1))
+            }
+        }
+        throw lastError ?: IllegalStateException("connect failed")
     }
 
     @AfterTest
