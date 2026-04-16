@@ -4,25 +4,15 @@
 [![Maven Central](https://img.shields.io/maven-central/v/com.monkopedia/blue-falcon-sdbus)](https://central.sonatype.com/artifact/com.monkopedia/blue-falcon-sdbus)
 [![License](https://img.shields.io/github/license/Monkopedia/blue-falcon-sdbus)](LICENSE)
 
-A Linux [BlueZ](https://www.bluez.org/) engine for the
-[Blue Falcon](https://github.com/Reedyuk/blue-falcon) BLE Kotlin
-Multiplatform library. Targets `linuxX64` and `linuxArm64`, drives the
-BlueZ adapter over D-Bus via
-[sdbus-kotlin](https://github.com/Monkopedia/sdbus-kotlin), and plugs
-into Blue Falcon 3.0's `BlueFalconEngine` contract so your common code
-can stay the same across Android, iOS, and Linux.
+Linux BlueZ engine for the [Blue Falcon](https://github.com/Reedyuk/blue-falcon)
+BLE Kotlin Multiplatform library, implemented on top of
+[sdbus-kotlin](https://github.com/Monkopedia/sdbus-kotlin).
 
-```kotlin
-val engine = SdbusEngine { logger = PrintLnLogger }
-engine.scan()
-engine.peripherals.first { it.any { p -> p.name == "My Device" } }
-// …connect, read, write, subscribe — the usual Blue Falcon surface.
-```
+Targets `linuxX64` and `linuxArm64`. Drives the BlueZ `hci0` adapter via
+the `org.bluez.Adapter1` / `Device1` / `GattCharacteristic1` /
+`GattDescriptor1` D-Bus interfaces.
 
 ## Install
-
-Add the engine to your Linux source set. `blue-falcon-core` is pulled
-in transitively — you don't need to declare it yourself.
 
 ```kotlin
 kotlin {
@@ -32,6 +22,7 @@ kotlin {
     sourceSets {
         linuxMain {
             dependencies {
+                implementation("dev.bluefalcon:blue-falcon-core:3.0.3")
                 implementation("com.monkopedia:blue-falcon-sdbus:1.0.0-3.0.3")
             }
         }
@@ -39,38 +30,31 @@ kotlin {
 }
 ```
 
-Versions are `<ours>-<blue-falcon-core>` — `1.0.0-3.0.3` means "our
-1.0.0 built against `blue-falcon-core:3.0.3`".
+Versions are `<ours>-<blue-falcon-core>`. `1.0.0-3.0.3` means "our 1.0.0
+built against blue-falcon-core 3.0.3".
 
 ### System requirements
 
-- BlueZ ≥ 5.50 running on the target system.
-- `libsystemd` at link and runtime (sdbus-kotlin links against it).
-- Access to the system D-Bus (`bluetooth` group membership or an
-  equivalent policy that grants access to `org.bluez`).
+- BlueZ ≥ 5.50 running on the target system
+- `libsystemd` at link and runtime (sdbus-kotlin links against it)
+- User must have permission to access the system D-Bus (`bluetooth` group
+  membership or a policy that grants access to `org.bluez`)
 
-Your consuming native binary needs linker flags pointing at
-`libsystemd`. The path differs by distro — the example below covers
-both Arch and Debian/Ubuntu layouts:
+Linker flags for the consuming binary:
 
 ```kotlin
 linuxX64 {
     binaries.all {
-        linkerOpts(
-            "-L/usr/lib",
-            "-L/usr/lib/x86_64-linux-gnu",
-            "-lsystemd", "-lrt", "--allow-shlib-undefined",
-        )
+        linkerOpts("-lsystemd", "-lrt", "--allow-shlib-undefined")
     }
 }
 ```
 
-## Quick start
+## Usage
 
 ```kotlin
 import com.monkopedia.bluefalcon.sdbus.SdbusEngine
 import dev.bluefalcon.core.PrintLnLogger
-import dev.bluefalcon.core.toUuid
 import kotlinx.coroutines.flow.first
 
 suspend fun main() {
@@ -78,125 +62,107 @@ suspend fun main() {
         logger = PrintLnLogger
     }
 
-    // Scan until a device called "My Device" shows up.
     engine.scan()
     val device = engine.peripherals
         .first { set -> set.any { it.name == "My Device" } }
         .first { it.name == "My Device" }
     engine.stopScanning()
 
-    // Connect, wait for services, read a characteristic.
     engine.connect(device)
     engine.discoverServices(device)
 
-    val deviceName = device.characteristics.first { it.uuid == "2a00".toUuid() }
-    engine.readCharacteristic(device, deviceName)
-    println("Device name from GATT: ${deviceName.value?.decodeToString()}")
+    val char = device.characteristics.first { it.uuid.toString().startsWith("00002a00") }
+    engine.readCharacteristic(device, char)
+    println("Value: ${char.value?.decodeToString()}")
 
     engine.disconnect(device)
     engine.destroy()
 }
 ```
 
-`destroy()` shuts down the D-Bus event loop and releases the system
-bus connection. Not calling it on exit leaks a background thread.
+### Observing notifications
 
-### Observing notifications and indications
-
-The core `BluetoothCharacteristic` interface only surfaces a snapshot
-`value`. For reactive updates, cast to `SdbusCharacteristic` and
-collect its `valueFlow`:
+The core `BluetoothCharacteristic` interface has no reactive surface.
+For push-based value updates, cast to `SdbusCharacteristic` and collect
+its `valueFlow`:
 
 ```kotlin
 import com.monkopedia.bluefalcon.sdbus.SdbusCharacteristic
-import kotlinx.coroutines.flow.filterNotNull
 
-engine.notifyCharacteristic(device, characteristic, notify = true)
-(characteristic as SdbusCharacteristic).valueFlow
+engine.notifyCharacteristic(device, char, notify = true)
+(char as SdbusCharacteristic).valueFlow
     .filterNotNull()
-    .collect { bytes -> println("Notified: ${bytes.joinToString(" ") { "%02x".format(it) }}") }
+    .collect { bytes -> println("Notified: ${bytes.toHexString()}") }
 ```
 
-BlueZ doesn't distinguish between GATT notifications and indications
-on the wire — both collapse into `StartNotify`. Call either
-`notifyCharacteristic` or `indicateCharacteristic`; the effect is the
-same.
+## What's supported
 
-## Supported operations
-
-| Feature                               | Status | Notes                                                                |
-|---------------------------------------|:------:|----------------------------------------------------------------------|
-| Scan with service UUID filters        | ✅     |                                                                      |
-| Connect / disconnect                  | ✅     | `suspend`; returns once BlueZ confirms                               |
-| Service / characteristic discovery    | ✅     | Auto-resolves via BlueZ's object tree                                |
-| Read / write characteristics          | ✅     | `writeType = 1` for write-without-response                           |
-| Notifications and indications         | ✅     | BlueZ collapses both into `StartNotify`                              |
-| Descriptor read / write               | ✅     |                                                                      |
-| MTU                                   | ⚠️     | `changeMTU` reports BlueZ's negotiated MTU; no setter is exposed     |
-| Bonding (`createBond` / `removeBond`) | ✅     | NoInputNoOutput ("Just Works") only                                  |
-| L2CAP CoC                             | ❌     | Not exposed via BlueZ's D-Bus API                                    |
-| `requestConnectionPriority`           | ❌     | Linux kernel manages connection parameters                           |
-| `refreshGattCache`                    | ❌     | BlueZ has no GATT cache refresh — reconnect to rediscover            |
+| Feature | Status | Notes |
+|---|---|---|
+| Scan with service UUID filters | ✅ | |
+| Connect / disconnect | ✅ | Suspend, returns when BlueZ confirms |
+| Service / characteristic discovery | ✅ | Auto-resolves via BlueZ's object tree |
+| Read / write characteristics | ✅ | `writeType = 1` for write-without-response |
+| Notifications / indications | ✅ | BlueZ collapses both into `StartNotify` |
+| Descriptors (read / write) | ✅ | |
+| MTU | ⚠️ | `changeMTU` reports the MTU BlueZ negotiated; no setter |
+| Bonding (`createBond` / `removeBond`) | ✅ | NoInputNoOutput ("Just Works") only |
+| L2CAP CoC | ❌ | Not exposed via BlueZ D-Bus |
+| `requestConnectionPriority` | ❌ | Linux kernel manages connection parameters |
+| `refreshGattCache` | ❌ | BlueZ has no GATT cache refresh; reconnect instead |
 
 ## Connect retry
 
 BlueZ rejects roughly 7% of back-to-back `Connect()` calls against the
 same peripheral with
-`org.bluez.Error.Failed: le-connection-abort-by-local` — the kernel
-and controller haven't finished releasing the previous link. To avoid
-papering the whole API in exception handling, `SdbusEngine` handles
-this case by default: `connect()` retries that one error up to three
-times with linear backoff (1s, 2s, 3s). Any other failure propagates
-immediately.
+`org.bluez.Error.Failed: le-connection-abort-by-local` — the kernel and
+controller are still releasing the previous link when the next attempt
+arrives. `SdbusEngine` handles this by default: `connect()` retries
+that specific error up to 3 times with 1s / 2s / 3s backoff, then
+propagates. Anything else fails fast, as usual.
 
-Override via `onConnectDelay` if you want different behavior — e.g.
-exponential backoff, deadline bounds, or no retry at all:
+Override via `onConnectDelay` if you want different behavior:
 
 ```kotlin
-import kotlin.time.Duration.Companion.milliseconds
-
 val engine = SdbusEngine {
+    // Exponential backoff up to 5 attempts, no special-casing of error.
     onConnectDelay = { attempt, _ ->
         if (attempt > 5) null else (200 * (1 shl attempt)).milliseconds
     }
 }
 ```
 
-Return `null` to give up; the engine then rethrows the original error.
+Return `null` to give up (the engine rethrows the original error).
 
-## Compatibility
+## Testing
 
-|                    | Version |
-|--------------------|---------|
-| Gradle             | 9.4.1   |
-| Kotlin             | 2.3.20  |
-| blue-falcon-core   | 3.0.3   |
-| sdbus-kotlin       | 0.4.3   |
-| kotlinx-coroutines | 1.10.2  |
-
-## Contributing
-
-The integration test module at `:integration-tests` runs 14 BLE tests
-against the
+Integration tests run against the
 [BF-Test](https://github.com/Monkopedia/bf-test-peripheral) ESP32-C6
-reference peripheral. It's opt-in — add `-PrunIntegrationTests=true`:
+reference peripheral.
 
 ```bash
-./gradlew :integration-tests:linuxX64Test -PrunIntegrationTests=true
+./gradlew :integration-tests:linkDebugTestLinuxX64
+./integration-tests/build/bin/linuxX64/debugTest/test.kexe
 ```
 
-CI only builds and links (no hardware available), so integration tests
-run locally on a Linux host with a flashed BF-Test device in range.
+The test binary will scan for a `BF-Test` device; flash the reference
+firmware to an ESP32-C6 first.
 
-Release process lives in [RELEASING.md](RELEASING.md).
+## Build compatibility
 
-Known rough edges in the tooling that this project works around:
+| | Version |
+|---|---|
+| Gradle | 9.4.1 |
+| Kotlin | 2.3.20 |
+| blue-falcon-core | 3.0.3 |
+| sdbus-kotlin | 0.4.3 |
+| kotlinx-coroutines | 1.10.2 |
 
-- [sdbus-kotlin#9](https://github.com/Monkopedia/sdbus-kotlin/issues/9) —
-  the KMP root `sourcesJar` doesn't declare the sdbus generator as an
-  input, which Gradle 9 rejects. `engine/build.gradle.kts` has a small
-  `tasks.matching { ... }.dependsOn("generateSdbusWrappers")` shim to
-  cover it; remove once upstream ships a fix.
+This repo includes a small workaround for
+[sdbus-kotlin#9](https://github.com/Monkopedia/sdbus-kotlin/issues/9)
+(the KMP root `sourcesJar` doesn't declare the generator as an input,
+which Gradle 9 rejects). Remove the workaround once that issue is
+fixed.
 
 ## License
 

@@ -26,7 +26,6 @@ kotlin {
             )
         }
     }
-    jvm()
 
     sourceSets {
         val commonMain by getting {
@@ -54,5 +53,5 @@ kotlin {
 val runIntegration = providers.gradleProperty("runIntegrationTests").orNull == "true"
 tasks.matching { task ->
     task.name == "linuxX64Test" || task.name == "linuxArm64Test" ||
-        task.name == "jvmTest" || task.name == "nativeTest" || task.name == "allTests"
+        task.name == "nativeTest" || task.name == "allTests"
 }.configureEach { enabled = runIntegration }

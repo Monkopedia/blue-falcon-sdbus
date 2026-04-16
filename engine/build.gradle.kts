@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.sdbus)
     alias(libs.plugins.vanniktech.maven.publish)
     signing
@@ -11,7 +10,6 @@ kotlin {
 
     linuxX64()
     linuxArm64()
-    jvm()
 
     sourceSets {
         val commonMain by getting {
@@ -20,33 +18,21 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.core)
             }
         }
-        // Shared source set for all targets that drive BlueZ via sdbus-kotlin:
-        // linuxX64, linuxArm64, and jvm (which uses sdbus-kotlin's JNI-backed
-        // Connection). The engine code has no K/N- or JVM-specific types, so
-        // it lives here and both hierarchies pick it up.
-        val sdbusMain by creating {
-            dependsOn(commonMain)
+        linuxMain {
             dependencies {
                 implementation(libs.sdbus.kotlin)
-                // Generated sdbus classes carry @Serializable annotations;
-                // kotlinx-serialization-core must be on the classpath of
-                // whatever source set consumes the generator output.
-                implementation(libs.kotlinx.serialization.core)
             }
         }
-        linuxMain { dependsOn(sdbusMain) }
-        val jvmMain by getting { dependsOn(sdbusMain) }
     }
 
     sourceSets.all {
         languageSettings.optIn("kotlin.uuid.ExperimentalUuidApi")
-        languageSettings.optIn("kotlin.ExperimentalUnsignedTypes")
     }
 }
 
 sdbus {
     sources.srcDirs("src/dbus")
-    outputs.add("sdbusMain")
+    outputs.add("linuxMain")
     generateProxies = true
     generateAdapters = true
     outputPackage = "com.monkopedia.bluefalcon.sdbus.bluez"
