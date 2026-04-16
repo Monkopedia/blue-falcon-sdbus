@@ -29,6 +29,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
@@ -42,19 +43,27 @@ import kotlinx.coroutines.withContext
 /**
  * Linux BlueZ engine for Blue Falcon, implemented on top of sdbus-kotlin.
  *
- * Connects to the system D-Bus and drives the hci0 adapter via
- * org.bluez.Adapter1/Device1/GattCharacteristic1/GattDescriptor1 interfaces.
+ * Connects to the system D-Bus and drives a BlueZ adapter via
+ * `org.bluez.Adapter1` / `Device1` / `GattCharacteristic1` /
+ * `GattDescriptor1` interfaces.
  *
- * @param logger Optional logger; errors and debug info are routed here.
- * @param autoDiscoverAllServicesAndCharacteristics When true, services are
- *   resolved automatically once BlueZ reports ServicesResolved=true.
- * @param adapterName BlueZ adapter to use, defaults to "hci0".
+ * Construct via the [SdbusEngine] DSL factory:
+ *
+ * ```kotlin
+ * val engine = SdbusEngine {
+ *     logger = PrintLnLogger
+ * }
+ * ```
+ *
+ * See [SdbusEngineConfig] for configuration options.
  */
-class SdbusEngine(
-    private val logger: Logger? = null,
-    private val autoDiscoverAllServicesAndCharacteristics: Boolean = true,
-    adapterName: String = "hci0",
+class SdbusEngine internal constructor(
+    private val config: SdbusEngineConfig,
 ) : BlueFalconEngine {
+    private val logger: Logger? = config.logger
+    private val autoDiscoverAllServicesAndCharacteristics: Boolean =
+        config.autoDiscoverAllServicesAndCharacteristics
+    private val adapterName: String = config.adapterName
 
     override val scope: CoroutineScope =
         CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -179,7 +188,25 @@ class SdbusEngine(
         val deviceProxy = Device1Proxy(createProxy(connection, bluezService, impl.objectPath))
         val observationScope = observeDeviceProperties(impl, deviceProxy)
         connectedDevices[impl.objectPath] = ConnectedDevice(deviceProxy, observationScope)
-        deviceProxy.connect()
+
+        var attempt = 0
+        while (true) {
+            try {
+                deviceProxy.connect()
+                return
+            } catch (t: Throwable) {
+                attempt++
+                val retryAfter = config.onConnectDelay(attempt, t)
+                if (retryAfter == null) {
+                    // Give up: drop the observation scope we just installed so a
+                    // subsequent connect() starts from a clean slate, then rethrow.
+                    connectedDevices.remove(impl.objectPath)?.observationScope?.cancel()
+                    throw t
+                }
+                logger?.debug("connect attempt $attempt failed (${t.message}); retrying in $retryAfter")
+                delay(retryAfter)
+            }
+        }
     }
 
     override suspend fun disconnect(peripheral: BluetoothPeripheral) {
@@ -525,3 +552,17 @@ class SdbusEngine(
         private var pendingShutdown: Job? = null
     }
 }
+
+/**
+ * Constructs an [SdbusEngine] via a [SdbusEngineConfig] DSL. A bare
+ * `SdbusEngine()` yields sensible defaults; pass a lambda to override.
+ *
+ * ```kotlin
+ * val engine = SdbusEngine {
+ *     logger = PrintLnLogger
+ * }
+ * ```
+ */
+fun SdbusEngine(configure: SdbusEngineConfig.() -> Unit = {}): SdbusEngine =
+    SdbusEngine(SdbusEngineConfig().apply(configure))
+

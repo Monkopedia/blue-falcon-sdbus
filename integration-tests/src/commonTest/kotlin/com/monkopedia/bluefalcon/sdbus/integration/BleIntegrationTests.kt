@@ -36,7 +36,10 @@ class BleIntegrationTests {
 
     @BeforeTest
     fun setUp() = runBlocking {
-        val e = SdbusEngine(logger = PrintLnLogger)
+        // SdbusEngine's default onConnectDelay retries the known-transient
+        // BlueZ "le-connection-abort-by-local" up to 3 times, so setUp
+        // doesn't need its own retry loop.
+        val e = SdbusEngine { logger = PrintLnLogger }
         engine = e
         val h = EngineTestHarness(e)
         harness = h
@@ -44,30 +47,9 @@ class BleIntegrationTests {
         val found = h.scanForDevice(timeoutMs = 120_000L) { device ->
             device.name == BfTestConstants.DEVICE_NAME
         }
-        // BlueZ frequently answers the first Connect() after a recent
-        // disconnect with "le-connection-abort-by-local"; retry a few
-        // times with backoff before giving up.
-        connectWithRetry(e, found)
+        e.connect(found)
         waitForServices(found, timeoutMs = 15_000L)
         peripheral = found
-    }
-
-    private suspend fun connectWithRetry(e: SdbusEngine, p: BluetoothPeripheral) {
-        var lastError: Throwable? = null
-        repeat(4) { attempt ->
-            try {
-                e.connect(p)
-                if (attempt > 0) {
-                    println("RETRY-OK: connect succeeded on attempt ${attempt + 1}")
-                }
-                return
-            } catch (t: Throwable) {
-                println("RETRY-FAIL: connect attempt ${attempt + 1} threw ${t::class.simpleName}: ${t.message}")
-                lastError = t
-                delay(1000L * (attempt + 1))
-            }
-        }
-        throw lastError ?: IllegalStateException("connect failed")
     }
 
     @AfterTest

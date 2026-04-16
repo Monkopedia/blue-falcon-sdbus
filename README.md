@@ -58,7 +58,9 @@ import dev.bluefalcon.core.PrintLnLogger
 import kotlinx.coroutines.flow.first
 
 suspend fun main() {
-    val engine = SdbusEngine(logger = PrintLnLogger)
+    val engine = SdbusEngine {
+        logger = PrintLnLogger
+    }
 
     engine.scan()
     val device = engine.peripherals
@@ -109,38 +111,28 @@ engine.notifyCharacteristic(device, char, notify = true)
 | `requestConnectionPriority` | ❌ | Linux kernel manages connection parameters |
 | `refreshGattCache` | ❌ | BlueZ has no GATT cache refresh; reconnect instead |
 
-## Troubleshooting
+## Connect retry
 
-### `le-connection-abort-by-local` on connect
+BlueZ rejects roughly 7% of back-to-back `Connect()` calls against the
+same peripheral with
+`org.bluez.Error.Failed: le-connection-abort-by-local` — the kernel and
+controller are still releasing the previous link when the next attempt
+arrives. `SdbusEngine` handles this by default: `connect()` retries
+that specific error up to 3 times with 1s / 2s / 3s backoff, then
+propagates. Anything else fails fast, as usual.
 
-BlueZ occasionally rejects the first `Connect()` after a recent
-disconnect from the same process with
-`org.bluez.Error.Failed: le-connection-abort-by-local` — the kernel /
-controller hasn't fully released the previous link yet. In practice we
-see this fire on ~7% of back-to-back connects against the same
-peripheral.
-
-`SdbusEngine.connect` surfaces the error rather than hiding it, so
-consumers can decide their own retry policy. A single retry after a
-short backoff is almost always enough:
+Override via `onConnectDelay` if you want different behavior:
 
 ```kotlin
-suspend fun connectWithRetry(
-    engine: SdbusEngine,
-    peripheral: BluetoothPeripheral,
-    attempts: Int = 3,
-) {
-    repeat(attempts) { i ->
-        try {
-            engine.connect(peripheral)
-            return
-        } catch (e: com.monkopedia.sdbus.Error) {
-            if (i == attempts - 1) throw e
-            kotlinx.coroutines.delay(1000L * (i + 1))
-        }
+val engine = SdbusEngine {
+    // Exponential backoff up to 5 attempts, no special-casing of error.
+    onConnectDelay = { attempt, _ ->
+        if (attempt > 5) null else (200 * (1 shl attempt)).milliseconds
     }
 }
 ```
+
+Return `null` to give up (the engine rethrows the original error).
 
 ## Testing
 
