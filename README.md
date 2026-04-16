@@ -130,13 +130,14 @@ firmware to an ESP32-C6 first.
 | Gradle | 9.4.1 |
 | Kotlin | 2.3.20 |
 | blue-falcon-core | 3.0.3 |
-| sdbus-kotlin | 0.4.2 |
+| sdbus-kotlin | 0.4.3 |
 | kotlinx-coroutines | 1.10.2 |
 
-This repo includes a workaround for
-[sdbus-kotlin#7](https://github.com/Monkopedia/sdbus-kotlin/issues/7)
-(generator tasks not wired as inputs to Kotlin compile tasks on
-Gradle 9). Remove the workaround once that issue is fixed.
+This repo includes a small workaround for
+[sdbus-kotlin#9](https://github.com/Monkopedia/sdbus-kotlin/issues/9)
+(the KMP root `sourcesJar` doesn't declare the generator as an input,
+which Gradle 9 rejects). Remove the workaround once that issue is
+fixed.
 
 ## License
 
