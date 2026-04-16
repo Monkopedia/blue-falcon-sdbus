@@ -269,7 +269,7 @@ class SdbusEngine(
         val charProxy = charProxy(char)
         val options = mutableMapOf<String, Variant>()
         options["type"] = Variant(if (writeType == 1) "command" else "request")
-        charProxy.writeValue(value.asUByteList(), options)
+        charProxy.writeValue(value.asUByteArray().toList(), options)
         char._value = value
     }
 
@@ -335,7 +335,7 @@ class SdbusEngine(
         val descProxy = GattDescriptor1Proxy(
             createProxy(connection, bluezService, desc.objectPath)
         )
-        descProxy.writeValue(value.asUByteList(), emptyMap())
+        descProxy.writeValue(value.asUByteArray().toList(), emptyMap())
         desc._value = value
     }
 
@@ -420,15 +420,6 @@ class SdbusEngine(
 
     private fun charProxy(char: SdbusCharacteristic) =
         GattCharacteristic1Proxy(createProxy(connection, bluezService, char.objectPath))
-
-    /**
-     * Explicit [UByte] list construction. [UByteArray.toList] goes through
-     * the generic [Iterable.toList] machinery, which on Kotlin/Native 2.3.20
-     * can produce a [List] with [Byte] elements — sdbus-kotlin then fails
-     * with a ClassCastException inside its generated `call(value, options)`.
-     */
-    private fun ByteArray.asUByteList(): List<UByte> =
-        List(size) { this[it].toUByte() }
 
     private suspend fun configureDiscoveryFilter(filters: List<ServiceFilter>) {
         val filterMap = mutableMapOf<String, Variant>(

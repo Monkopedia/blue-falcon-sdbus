@@ -1,7 +1,7 @@
 [versions]
 kotlin = "2.3.20"
 coroutines = "1.10.2"
-sdbusKotlin = "0.4.2"
+sdbusKotlin = "0.4.3"
 blueFalconCore = "3.0.3"
 vanniktechMavenPublish = "0.36.0"
 

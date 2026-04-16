@@ -38,15 +38,12 @@ sdbus {
     outputPackage = "com.monkopedia.bluefalcon.sdbus.bluez"
 }
 
-// Workaround: sdbus-kotlin 0.4.2 plugin doesn't wire its generators as inputs
-// to the tasks that consume the generated sources, which Gradle 9 flags as
-// an error. See https://github.com/Monkopedia/sdbus-kotlin/issues/7
-tasks.matching { task ->
-    task.name.startsWith("compileKotlinLinux") ||
-        task.name == "compileLinuxMainKotlinMetadata" ||
-        task.name.endsWith("SourcesJar") ||
-        task.name == "sourcesJar"
-}.configureEach { dependsOn("generateSdbusWrappers") }
+// Workaround: the sdbus-kotlin plugin wires its generator as an input to the
+// Kotlin compile tasks (fixed in 0.4.3, see sdbus-kotlin#7), but the KMP
+// aggregate `sourcesJar` used by vanniktech-maven-publish still consumes the
+// generated sources without a declared dependency. Gradle 9 rejects that.
+tasks.matching { it.name == "sourcesJar" || it.name.endsWith("SourcesJar") }
+    .configureEach { dependsOn("generateSdbusWrappers") }
 
 mavenPublishing {
     publishToMavenCentral(automaticRelease = true)
