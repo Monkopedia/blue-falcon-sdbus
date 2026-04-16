@@ -1,16 +1,19 @@
 [versions]
 kotlin = "2.3.20"
 coroutines = "1.10.2"
+serialization = "1.11.0"
 sdbusKotlin = "0.4.3"
 blueFalconCore = "3.0.3"
 vanniktechMavenPublish = "0.36.0"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-serialization-core = { module = "org.jetbrains.kotlinx:kotlinx-serialization-core", version.ref = "serialization" }
 sdbus-kotlin = { module = "com.monkopedia:sdbus-kotlin", version.ref = "sdbusKotlin" }
 blue-falcon-core = { module = "dev.bluefalcon:blue-falcon-core", version.ref = "blueFalconCore" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 sdbus = { id = "com.monkopedia.sdbus.plugin", version.ref = "sdbusKotlin" }
 vanniktech-maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "vanniktechMavenPublish" }
