@@ -43,4 +43,11 @@ val runIntegration = providers.gradleProperty("runIntegrationTests").orNull == "
 tasks.matching { task ->
     task.name == "linuxX64Test" || task.name == "linuxArm64Test" ||
         task.name == "nativeTest" || task.name == "allTests"
-}.configureEach { enabled = runIntegration }
+}.configureEach {
+    enabled = runIntegration
+    if (this is org.gradle.api.tasks.testing.Test) {
+        testLogging {
+            showStandardStreams = true
+        }
+    }
+}

@@ -57,8 +57,12 @@ class BleIntegrationTests {
         repeat(4) { attempt ->
             try {
                 e.connect(p)
+                if (attempt > 0) {
+                    println("RETRY-OK: connect succeeded on attempt ${attempt + 1}")
+                }
                 return
             } catch (t: Throwable) {
+                println("RETRY-FAIL: connect attempt ${attempt + 1} threw ${t::class.simpleName}: ${t.message}")
                 lastError = t
                 delay(1000L * (attempt + 1))
             }
