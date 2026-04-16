@@ -8,6 +8,8 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # so GITHUB_TOKEN can create a GitHub Release
     steps:
       - uses: actions/checkout@v4
 
@@ -52,3 +54,31 @@ jobs:
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
         run: ./gradlew :engine:publishToMavenCentral
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
+          # Extract the CHANGELOG block for this version (everything between
+          # `## [VERSION] - …` and the next `## […]` heading).
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" { flag = 1; next }
+            flag && /^## \[/        { exit }
+            flag                     { print }
+          ' CHANGELOG.md > release-notes.md
+          # Prepend Maven coordinates so the Release page has a copy-pastable
+          # install snippet at the top.
+          {
+            echo "\`\`\`kotlin"
+            echo "implementation(\"com.monkopedia:blue-falcon-sdbus:${VERSION}\")"
+            echo "\`\`\`"
+            echo
+            cat release-notes.md
+          } > release-notes-final.md
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TAG" \
+            --notes-file release-notes-final.md

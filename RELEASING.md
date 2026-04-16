@@ -38,9 +38,13 @@ The `release.yml` workflow will:
 2. Verify `CHANGELOG.md` has a dated entry for the version.
 3. Publish the engine artifact to Maven Central via
    `com.vanniktech.maven.publish`.
+4. Create a GitHub Release for the tag whose body is the CHANGELOG
+   section for this version, with the Maven coordinates prepended.
 
 If any gate fails, the tag remains but nothing publishes. Fix the issue
 on `main`, delete the tag (`git push origin :vX.Y.Z-CORE`), and re-tag.
+The GitHub Release is only created on a successful publish, so a failed
+run leaves no dangling release.
 
 ## Required repo secrets
 
