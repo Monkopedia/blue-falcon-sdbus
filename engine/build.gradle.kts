@@ -12,8 +12,27 @@ kotlin {
     // linuxArm64, and jvm via its JNI Connection), and the engine is sdbus-only
     // by nature, so all of it — including the generated BlueZ proxies — lives in
     // commonMain.
-    linuxX64()
-    linuxArm64()
+    // libsystemd linker opts so the engine's own native test binaries link
+    // (consumers still supply their own — see README). Paths cover Arch
+    // (/usr/lib) and Debian/Ubuntu multiarch; nonexistent -L paths are ignored.
+    linuxX64 {
+        binaries.all {
+            linkerOpts(
+                "-L/usr/lib",
+                "-L/usr/lib/x86_64-linux-gnu",
+                "-lsystemd", "-lrt", "--allow-shlib-undefined",
+            )
+        }
+    }
+    linuxArm64 {
+        binaries.all {
+            linkerOpts(
+                "-L/usr/lib",
+                "-L/usr/lib/aarch64-linux-gnu",
+                "-lsystemd", "-lrt", "--allow-shlib-undefined",
+            )
+        }
+    }
     jvm()
 
     sourceSets {
@@ -26,6 +45,12 @@ kotlin {
                 // annotations; the JVM target needs the annotation on its
                 // classpath (native gets it transitively from sdbus-kotlin).
                 implementation(libs.kotlinx.serialization.core)
+            }
+        }
+        val commonTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
+                implementation(libs.kotlinx.coroutines.test)
             }
         }
     }
