@@ -33,7 +33,7 @@ kotlin {
     sourceSets {
         linuxMain {
             dependencies {
-                implementation("com.monkopedia:blue-falcon-sdbus:1.0.0-3.0.3")
+                implementation("com.monkopedia:blue-falcon-sdbus:1.2.0-3.4.1")
             }
         }
     }
@@ -104,19 +104,23 @@ bus connection. Not calling it on exit leaks a background thread.
 
 ### Observing notifications and indications
 
-The core `BluetoothCharacteristic` interface only surfaces a snapshot
-`value`. For reactive updates, cast to `SdbusCharacteristic` and
-collect its `valueFlow`:
+Blue Falcon 3.4's `BluetoothCharacteristic` exposes a
+`notifications: SharedFlow<ByteArray>` of push updates, which the engine
+drives while the characteristic is notifying:
 
 ```kotlin
-import com.monkopedia.bluefalcon.sdbus.SdbusCharacteristic
-import kotlinx.coroutines.flow.filterNotNull
-
 engine.notifyCharacteristic(device, characteristic, notify = true)
-(characteristic as SdbusCharacteristic).valueFlow
-    .filterNotNull()
+characteristic.notifications
     .collect { bytes -> println("Notified: ${bytes.joinToString(" ") { "%02x".format(it) }}") }
 ```
+
+The engine-wide stream is also available as
+`engine.characteristicNotifications: SharedFlow<CharacteristicNotification>`,
+which tags each value with its peripheral and characteristic.
+
+For a snapshot-style surface that also reflects explicit reads, cast to
+`SdbusCharacteristic` and collect its `valueFlow: StateFlow<ByteArray?>`
+(it replays the last known value, unlike the push-only `notifications`).
 
 BlueZ doesn't distinguish between GATT notifications and indications
 on the wire — both collapse into `StartNotify`. Call either
@@ -170,9 +174,9 @@ Return `null` to give up; the engine then rethrows the original error.
 |                    | Version |
 |--------------------|---------|
 | Gradle             | 9.4.1   |
-| Kotlin             | 2.3.20  |
-| blue-falcon-core   | 3.0.3   |
-| sdbus-kotlin       | 0.4.4   |
+| Kotlin             | 2.4.0   |
+| blue-falcon-core   | 3.4.1   |
+| sdbus-kotlin       | 0.4.5   |
 | kotlinx-coroutines | 1.10.2  |
 
 ## Contributing
