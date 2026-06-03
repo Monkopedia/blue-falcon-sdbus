@@ -8,31 +8,38 @@ plugins {
 kotlin {
     jvmToolchain(17)
 
+    // sdbus-kotlin backs every target this engine supports (linuxX64,
+    // linuxArm64, and jvm via its JNI Connection), and the engine is sdbus-only
+    // by nature, so all of it — including the generated BlueZ proxies — lives in
+    // commonMain.
     linuxX64()
     linuxArm64()
+    jvm()
 
     sourceSets {
         val commonMain by getting {
             dependencies {
                 api(libs.blue.falcon.core)
                 implementation(libs.kotlinx.coroutines.core)
-            }
-        }
-        linuxMain {
-            dependencies {
                 implementation(libs.sdbus.kotlin)
+                // The generated sdbus proxy/adapter classes carry @Serializable
+                // annotations; the JVM target needs the annotation on its
+                // classpath (native gets it transitively from sdbus-kotlin).
+                implementation(libs.kotlinx.serialization.core)
             }
         }
     }
 
     sourceSets.all {
         languageSettings.optIn("kotlin.uuid.ExperimentalUuidApi")
+        // sdbus-kotlin 0.4.4 surfaces characteristic values as UByte arrays.
+        languageSettings.optIn("kotlin.ExperimentalUnsignedTypes")
     }
 }
 
 sdbus {
     sources.srcDirs("src/dbus")
-    outputs.add("linuxMain")
+    outputs.add("commonMain")
     generateProxies = true
     generateAdapters = true
     outputPackage = "com.monkopedia.bluefalcon.sdbus.bluez"

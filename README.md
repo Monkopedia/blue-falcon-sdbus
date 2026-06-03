@@ -6,8 +6,9 @@
 
 A Linux [BlueZ](https://www.bluez.org/) engine for the
 [Blue Falcon](https://github.com/Reedyuk/blue-falcon) BLE Kotlin
-Multiplatform library. Targets `linuxX64` and `linuxArm64`, drives the
-BlueZ adapter over D-Bus via
+Multiplatform library. Targets `linuxX64`, `linuxArm64`, and `jvm`
+(all Linux-hosted — the `jvm` target drives the same BlueZ stack through
+sdbus-kotlin's JNI backend), drives the BlueZ adapter over D-Bus via
 [sdbus-kotlin](https://github.com/Monkopedia/sdbus-kotlin), and plugs
 into Blue Falcon 3.0's `BlueFalconEngine` contract so your common code
 can stay the same across Android, iOS, and Linux.
@@ -171,7 +172,7 @@ Return `null` to give up; the engine then rethrows the original error.
 | Gradle             | 9.4.1   |
 | Kotlin             | 2.3.20  |
 | blue-falcon-core   | 3.0.3   |
-| sdbus-kotlin       | 0.4.3   |
+| sdbus-kotlin       | 0.4.4   |
 | kotlinx-coroutines | 1.10.2  |
 
 ## Contributing
