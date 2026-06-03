@@ -60,6 +60,9 @@ This is the most important rule for autonomous work on this repo.
 **Autonomously verifiable (do this before claiming a change works):**
 
 - Compilation of both native targets — `:engine:build`.
+- **Engine unit tests** — `:engine:build` runs them on jvm + native
+  (`:engine:jvmTest` / `:engine:linuxX64Test`). They cover pure flow/state
+  logic only (no D-Bus / no hardware), e.g. the notification-flow semantics.
 - Integration-test binary *links* — `:integration-tests:linkDebugTestLinuxX64`.
 - Public API surface / source-level correctness by reading the code.
 
@@ -72,10 +75,12 @@ This is the most important rule for autonomous work on this repo.
 
 Consequences for triage/work/review subagents:
 
-- The engine currently has **no unit tests** — `:engine` test tasks
-  report `NO-SOURCE`. "Tests pass" here means *compile + link*, not
-  behavioral coverage. Don't report a behavioral fix as verified without
-  hardware.
+- The engine has a small set of **unit tests** (`:engine` commonTest) that
+  run on jvm + native as part of `:engine:build`, so "CI green" now includes
+  *some* behavioral coverage. But they exercise only pure flow/state logic;
+  **anything touching live BLE (scan/connect/GATT/notifications/bonding) is
+  still hardware-gated** and unverifiable in CI. Don't report a live-BLE
+  behavioral fix as verified without hardware.
 - **Do not treat hardware-gated integration-test failures (or their
   absence in CI) as real bugs.** A red live-BLE result on a host with no
   BF-Test peripheral is expected, not a regression.
