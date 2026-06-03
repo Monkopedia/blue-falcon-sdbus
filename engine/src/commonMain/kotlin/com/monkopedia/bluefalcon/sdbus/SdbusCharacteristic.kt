@@ -6,8 +6,12 @@ import dev.bluefalcon.core.BluetoothCharacteristicDescriptor
 import dev.bluefalcon.core.BluetoothService
 import dev.bluefalcon.core.Uuid
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class SdbusCharacteristic internal constructor(
@@ -34,6 +38,24 @@ class SdbusCharacteristic internal constructor(
         set(v) { _valueFlow.value = v }
 
     override val value: ByteArray? get() = _valueFlow.value
+
+    private val _notifications = MutableSharedFlow<ByteArray>(
+        extraBufferCapacity = 64,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+
+    /**
+     * The core [BluetoothCharacteristic] notification stream. Emits each
+     * notification/indication value while [isNotifying]; unlike [valueFlow] it
+     * carries only push updates, not values fetched by explicit reads.
+     */
+    override val notifications: SharedFlow<ByteArray> = _notifications.asSharedFlow()
+
+    /** Records a pushed value: updates [valueFlow] and emits on [notifications]. */
+    internal fun emitNotification(value: ByteArray) {
+        _valueFlow.value = value
+        _notifications.tryEmit(value)
+    }
 
     private val _descriptors = mutableListOf<SdbusDescriptor>()
     override val descriptors: List<BluetoothCharacteristicDescriptor> get() = _descriptors.toList()

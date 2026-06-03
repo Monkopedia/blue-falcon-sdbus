@@ -21,6 +21,8 @@ import dev.bluefalcon.core.BluetoothManagerState
 import dev.bluefalcon.core.BluetoothPeripheral
 import dev.bluefalcon.core.BluetoothPeripheralState
 import dev.bluefalcon.core.BluetoothService
+import dev.bluefalcon.core.BluetoothSocket
+import dev.bluefalcon.core.CharacteristicNotification
 import dev.bluefalcon.core.ConnectionPriority
 import dev.bluefalcon.core.Logger
 import dev.bluefalcon.core.ServiceFilter
@@ -33,8 +35,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -73,6 +79,13 @@ class SdbusEngine internal constructor(
 
     private val _managerState = MutableStateFlow(BluetoothManagerState.Ready)
     override val managerState: StateFlow<BluetoothManagerState> = _managerState.asStateFlow()
+
+    private val _characteristicNotifications = MutableSharedFlow<CharacteristicNotification>(
+        extraBufferCapacity = 64,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    override val characteristicNotifications: SharedFlow<CharacteristicNotification> =
+        _characteristicNotifications.asSharedFlow()
 
     override var isScanning: Boolean = false
         private set
@@ -307,7 +320,7 @@ class SdbusEngine internal constructor(
         characteristic: BluetoothCharacteristic,
         notify: Boolean,
     ) {
-        toggleNotifications(characteristic.asSdbus(), notify)
+        toggleNotifications(peripheral, characteristic.asSdbus(), notify)
     }
 
     override suspend fun indicateCharacteristic(
@@ -316,15 +329,23 @@ class SdbusEngine internal constructor(
         indicate: Boolean,
     ) {
         // BlueZ's StartNotify covers both GATT notify and indicate.
-        toggleNotifications(characteristic.asSdbus(), indicate)
+        toggleNotifications(peripheral, characteristic.asSdbus(), indicate)
     }
 
-    private suspend fun toggleNotifications(char: SdbusCharacteristic, enable: Boolean) {
+    private suspend fun toggleNotifications(
+        peripheral: BluetoothPeripheral,
+        char: SdbusCharacteristic,
+        enable: Boolean,
+    ) {
         val charProxy = charProxy(char)
         if (enable && !char.isNotifying) {
             val job = scope.launch {
                 charProxy.valueProperty.changes().collect { value ->
-                    char._value = value.toUByteArray().asByteArray()
+                    val bytes = value.toUByteArray().asByteArray()
+                    char.emitNotification(bytes)
+                    _characteristicNotifications.tryEmit(
+                        CharacteristicNotification(peripheral, char, bytes),
+                    )
                 }
             }
             char._notifyJob = job
@@ -387,7 +408,11 @@ class SdbusEngine internal constructor(
 
     // ---- L2CAP ----
 
-    override suspend fun openL2capChannel(peripheral: BluetoothPeripheral, psm: Int) {
+    override suspend fun openL2capChannel(
+        peripheral: BluetoothPeripheral,
+        psm: Int,
+        secure: Boolean,
+    ): BluetoothSocket {
         // L2CAP CoC isn't exposed via BlueZ's D-Bus API. Supporting this
         // would require AF_BLUETOOTH raw sockets outside of sdbus-kotlin.
         throw UnsupportedOperationException("L2CAP channels are not supported on the BlueZ engine")

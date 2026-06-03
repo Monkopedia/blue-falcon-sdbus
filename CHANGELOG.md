@@ -8,6 +8,25 @@ means "our 1.0.0 built against `dev.bluefalcon:blue-falcon-core:3.0.3`".
 
 ## [Unreleased]
 
+## [1.2.0-3.4.1] - 2026-06-02
+
+### Added
+
+- Wired up Blue Falcon 3.4's reactive notification surface:
+  `BluetoothCharacteristic.notifications: SharedFlow<ByteArray>` (push-only,
+  per characteristic) and `BlueFalconEngine.characteristicNotifications:
+  SharedFlow<CharacteristicNotification>` (engine-wide, tagged with peripheral
+  + characteristic). `SdbusCharacteristic.valueFlow` remains for snapshot /
+  read-reflecting observation.
+
+### Changed
+
+- Upgraded to `blue-falcon-core` 3.4.1 (from 3.0.3) — adapts `SdbusEngine`
+  and `SdbusCharacteristic` to the 3.4 `BlueFalconEngine` contract (the new
+  notification members above; `openL2capChannel` gains a `secure` flag and
+  returns `BluetoothSocket` — still unsupported on BlueZ).
+- Upgraded to Kotlin 2.4.0 (from 2.3.20) and `sdbus-kotlin` 0.4.5 (from 0.4.4).
+
 ## [1.1.0-3.0.3] - 2026-06-02
 
 ### Added
