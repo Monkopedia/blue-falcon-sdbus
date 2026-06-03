@@ -171,6 +171,31 @@ class BleIntegrationTests {
     }
 
     @Test
+    fun charDNotificationsOnCoreFlows(): Unit = runBlocking {
+        val charD = findChar(BfTestConstants.CHAR_D_NOTIFY)
+
+        // Per-characteristic notifications flow (new in Blue Falcon 3.4),
+        // collected directly off the core BluetoothCharacteristic interface
+        // (no SdbusCharacteristic cast).
+        val perChar = harness().collectCoreNotifications(charD, count = 2, timeoutMs = 15_000L) {
+            engine().notifyCharacteristic(peripheral(), charD, true)
+        }
+        engine().notifyCharacteristic(peripheral(), charD, false)
+        assertEquals(2, perChar.size)
+
+        // Engine-wide stream, tagged with its peripheral + characteristic.
+        val engineWide = harness().collectEngineNotifications(count = 2, timeoutMs = 15_000L) {
+            engine().notifyCharacteristic(peripheral(), charD, true)
+        }
+        engine().notifyCharacteristic(peripheral(), charD, false)
+        assertEquals(2, engineWide.size)
+        assertTrue(
+            engineWide.all { it.characteristic.uuid == charD.uuid },
+            "engine-wide notifications should be tagged with the source characteristic",
+        )
+    }
+
+    @Test
     fun indications(): Unit = runBlocking {
         val charE = findChar(BfTestConstants.CHAR_E_INDICATE)
         engine().indicateCharacteristic(peripheral(), charE, true)
