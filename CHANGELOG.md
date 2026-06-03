@@ -8,7 +8,7 @@ means "our 1.0.0 built against `dev.bluefalcon:blue-falcon-core:3.0.3`".
 
 ## [Unreleased]
 
-## [1.2.0-3.4.1] - 2026-06-02
+## [1.2.0-3.4.1] - 2026-06-03
 
 ### Added
 
@@ -26,6 +26,13 @@ means "our 1.0.0 built against `dev.bluefalcon:blue-falcon-core:3.0.3`".
   notification members above; `openL2capChannel` gains a `secure` flag and
   returns `BluetoothSocket` — still unsupported on BlueZ).
 - Upgraded to Kotlin 2.4.0 (from 2.3.20) and `sdbus-kotlin` 0.4.5 (from 0.4.4).
+
+### Verified
+
+- All 14 integration tests pass on both `linuxX64Test` and `jvmTest`
+  against a BF-Test ESP32-C6 reference peripheral
+  (adolin / Arch Linux / BlueZ 5.86-5) — including the new 3.4
+  notification path (`charDNotifications`, `indications`).
 
 ## [1.1.0-3.0.3] - 2026-06-02
 
