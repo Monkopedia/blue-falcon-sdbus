@@ -8,18 +8,25 @@ means "our 1.0.0 built against `dev.bluefalcon:blue-falcon-core:3.0.3`".
 
 ## [Unreleased]
 
+## [1.1.0-3.0.3] - 2026-06-02
+
 ### Added
 
 - `jvm` target alongside `linuxX64` / `linuxArm64`. The JVM target is
   Linux-hosted — it drives the same BlueZ stack through sdbus-kotlin's
-  JNI-backed `Connection`. Validated against the BF-Test peripheral
-  (all GATT integration tests green on JVM).
+  JNI-backed `Connection`.
 
 ### Changed
 
 - Bumped `sdbus-kotlin` to `0.4.4`, which fixes the JVM-backend
   empty-collection D-Bus signature and `ay`→`UByte` deserialization bugs
   that previously made GATT reads fail on the JVM target.
+
+### Verified
+
+- All 14 integration tests pass on **both** `linuxX64Test` and `jvmTest`
+  against a BF-Test ESP32-C6 reference peripheral
+  (adolin / Arch Linux / BlueZ 5.86-5).
 
 ## [1.0.0-3.0.3] - 2026-04-16
 
