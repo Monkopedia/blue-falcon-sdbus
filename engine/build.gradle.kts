@@ -57,7 +57,7 @@ kotlin {
 
     sourceSets.all {
         languageSettings.optIn("kotlin.uuid.ExperimentalUuidApi")
-        // sdbus-kotlin 0.4.4 surfaces characteristic values as UByte arrays.
+        // sdbus-kotlin surfaces characteristic values as UByte arrays.
         languageSettings.optIn("kotlin.ExperimentalUnsignedTypes")
     }
 }
@@ -69,13 +69,6 @@ sdbus {
     generateAdapters = true
     outputPackage = "com.monkopedia.bluefalcon.sdbus.bluez"
 }
-
-// Workaround: the sdbus-kotlin plugin wires its generator as an input to the
-// Kotlin compile tasks (fixed in 0.4.3, see sdbus-kotlin#7), but the KMP
-// aggregate `sourcesJar` used by vanniktech-maven-publish still consumes the
-// generated sources without a declared dependency. Gradle 9 rejects that.
-tasks.matching { it.name == "sourcesJar" || it.name.endsWith("SourcesJar") }
-    .configureEach { dependsOn("generateSdbusWrappers") }
 
 mavenPublishing {
     publishToMavenCentral(automaticRelease = true)
