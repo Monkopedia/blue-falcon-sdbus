@@ -12,7 +12,8 @@ Multiplatform library. It implements Blue Falcon 3.0's
 BlueZ adapter over the system D-Bus so common BLE code can run on Linux
 alongside Android and iOS.
 
-- **Targets:** `linuxX64` and `linuxArm64` (Kotlin/Native).
+- **Targets:** `linuxX64`, `linuxArm64` (Kotlin/Native), and `jvm`
+  (JVM-on-Linux — drives BlueZ through sdbus-kotlin's JNI backend).
 - **Published to:** Maven Central as `com.monkopedia:blue-falcon-sdbus`.
 - **Version scheme:** `<ours>-<blue-falcon-core>` — e.g. `1.0.0-3.0.3`
   means "our 1.0.0 built against `dev.bluefalcon:blue-falcon-core:3.0.3`".
@@ -24,7 +25,7 @@ runbook; `CHANGELOG.md` follows Keep a Changelog.
 ## Module layout
 
 - **`:engine`** — the engine itself. Hand-written Kotlin lives in
-  `engine/src/linuxMain/kotlin/com/monkopedia/bluefalcon/sdbus/`
+  `engine/src/commonMain/kotlin/com/monkopedia/bluefalcon/sdbus/`
   (`SdbusEngine` is the bulk of it; plus `SdbusEngineConfig`,
   `SdbusPeripheral`, `SdbusService`, `SdbusCharacteristic`,
   `NoInputNoOutputAgent`). The BlueZ D-Bus interfaces in
