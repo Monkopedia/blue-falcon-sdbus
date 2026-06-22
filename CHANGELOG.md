@@ -8,6 +8,27 @@ means "our 1.0.0 built against `dev.bluefalcon:blue-falcon-core:3.0.3`".
 
 ## [Unreleased]
 
+## [1.2.1-3.4.1] - 2026-06-22
+
+### Changed
+
+- Bumped `sdbus-kotlin` to `0.6.0` (from 0.4.5) — through the 1.0 API freeze
+  (0.5.0) and the 1.0-polish wave (0.6.0). Two consumer-visible migrations,
+  both internal to the engine (public API unchanged):
+  - `Connection` event-loop rename `enterEventLoopAsync()` → `startEventLoop()`
+    and `leaveEventLoop()` → `stopEventLoop()` (settled in 0.5.0, unchanged in
+    0.6.0).
+  - The connect-retry predicate's exception type `com.monkopedia.sdbus.Error`
+    → `SdbusException` (0.6.0 renamed it; the old alias is deprecated and drops
+    at 1.0).
+  - 0.6.0's remaining renames (`acall` → `asyncCall`, fluent → direct property
+    accessors, `requestName` flags, …) land entirely in generated BlueZ
+    proxies, which the 0.6.0 plugin regenerates from the D-Bus XML.
+
+### Verified
+
+- _Pending hardware re-run on adolin._
+
 ## [1.2.0-3.4.1] - 2026-06-03
 
 ### Added
