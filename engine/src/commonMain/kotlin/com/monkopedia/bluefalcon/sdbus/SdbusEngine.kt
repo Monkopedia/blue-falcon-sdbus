@@ -115,7 +115,7 @@ class SdbusEngine internal constructor(
         objectManagerProxy = ObjectManagerProxy(
             createProxy(connection, bluezService, ObjectPath("/"))
         )
-        connection.enterEventLoopAsync()
+        connection.startEventLoop()
         registerAgent()
     }
 
@@ -448,10 +448,10 @@ class SdbusEngine internal constructor(
         scanJob = null
         connectedDevices.values.forEach { it.observationScope.cancel() }
         connectedDevices.clear()
-        // leaveEventLoop() suspends; fire-and-forget on its own scope so
+        // stopEventLoop() suspends; fire-and-forget on its own scope so
         // destroy() can return. The next engine instance awaits this.
         pendingShutdown = CoroutineScope(Dispatchers.Default).launch {
-            connection.leaveEventLoop()
+            connection.stopEventLoop()
         }
         scope.cancel()
     }

@@ -1,5 +1,6 @@
 package com.monkopedia.bluefalcon.sdbus
 
+import com.monkopedia.sdbus.SdbusException
 import dev.bluefalcon.core.Logger
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -71,7 +72,7 @@ class SdbusEngineConfig {
 
 private fun defaultConnectRetry(attempt: Int, error: Throwable): Duration? {
     val message = error.message ?: return null
-    val isTransient = error is com.monkopedia.sdbus.Error &&
+    val isTransient = error is SdbusException &&
         "le-connection-abort-by-local" in message
     return if (isTransient && attempt <= 3) attempt.seconds else null
 }
