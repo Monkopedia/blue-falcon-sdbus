@@ -8,6 +8,19 @@ means "our 1.0.0 built against `dev.bluefalcon:blue-falcon-core:3.0.3`".
 
 ## [Unreleased]
 
+## [1.2.1-3.4.1] - 2026-06-13
+
+### Changed
+
+- Bumped `sdbus-kotlin` to `0.5.0` (from 0.4.5) — the 1.0 API freeze. The
+  only consumer-visible migration was the `Connection` event-loop rename
+  (`enterEventLoopAsync()` → `startEventLoop()`, `leaveEventLoop()` →
+  `stopEventLoop()`); the engine's public API is unchanged.
+
+### Verified
+
+- _Pending hardware re-run on adolin._
+
 ## [1.2.0-3.4.1] - 2026-06-03
 
 ### Added
