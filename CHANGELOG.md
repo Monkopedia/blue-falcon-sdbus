@@ -8,6 +8,22 @@ means "our 1.0.0 built against `dev.bluefalcon:blue-falcon-core:3.0.3`".
 
 ## [Unreleased]
 
+## [1.2.2-3.4.1] - 2026-07-07
+
+### Changed
+
+- Bumped `sdbus-kotlin` to `1.0.0` (from 0.6.0) — the stable 1.0 release. This
+  is the cut that removes the deprecated aliases (the fluent property layer and
+  the `Error` typealias); the engine was already 1.0-clean (it moved to
+  `SdbusException` in 1.2.1), so the bump is a **version-only change with no
+  engine source edits**. 1.0.0 also lands sdbus-kotlin's cross-backend JVM
+  parity wave, so the D-Bus behaviour this engine relies on is now native-parity
+  and regression-guarded on the JVM target.
+
+### Verified
+
+- _Pending hardware re-run on adolin._
+
 ## [1.2.1-3.4.1] - 2026-06-22
 
 ### Changed
