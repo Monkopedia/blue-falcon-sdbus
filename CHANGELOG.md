@@ -29,7 +29,12 @@ means "our 1.0.0 built against `dev.bluefalcon:blue-falcon-core:3.0.3`".
 
 ### Verified
 
-- _Pending hardware re-run on adolin._
+- All 15 integration tests pass on **both** `linuxX64Test` and `jvmTest`
+  against a BF-Test ESP32-C6 reference peripheral
+  (adolin / Arch Linux / BlueZ 5.86-6) — full GATT surface (read / write /
+  no-response / notify / indicate / descriptors / MTU), bonding, and the 3.4
+  notification flows, confirming the sdbus-kotlin 1.0.1 / Kotlin 2.4.10 /
+  coroutines 1.11.0 runtime drives BlueZ correctly over live hardware.
 
 ## [1.2.2-3.4.1] - 2026-07-07
 
