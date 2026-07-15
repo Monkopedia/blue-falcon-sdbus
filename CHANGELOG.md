@@ -8,6 +8,29 @@ means "our 1.0.0 built against `dev.bluefalcon:blue-falcon-core:3.0.3`".
 
 ## [Unreleased]
 
+## [1.2.3-3.4.1] - 2026-07-15
+
+### Changed
+
+- Bumped `sdbus-kotlin` to `1.0.1` (from 1.0.0). Version-only change with no
+  engine source edits.
+- Refreshed the build toolchain to align with sdbus-kotlin 1.0.1 and avoid
+  Kotlin/Native klib skew: Kotlin `2.4.0` → `2.4.10` and
+  `kotlinx-coroutines` `1.10.2` → `1.11.0` (both the latest stable, and the
+  exact versions sdbus-kotlin 1.0.1 ships against). `kotlinx-serialization`
+  stays at `1.11.0`. The engine's public API is unchanged.
+
+### Added
+
+- Engine unit tests for the connect-retry policy
+  (`SdbusEngineConfig.onConnectDelay`) and `SdbusPeripheral` address/name/uuid
+  derivation from the BlueZ object path — pure flow/state coverage that runs on
+  jvm + native without hardware.
+
+### Verified
+
+- _Pending hardware re-run on adolin._
+
 ## [1.2.2-3.4.1] - 2026-07-07
 
 ### Changed
