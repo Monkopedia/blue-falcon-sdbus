@@ -33,7 +33,7 @@ kotlin {
     sourceSets {
         linuxMain {
             dependencies {
-                implementation("com.monkopedia:blue-falcon-sdbus:1.2.0-3.4.1")
+                implementation("com.monkopedia:blue-falcon-sdbus:1.2.3-3.4.1")
             }
         }
     }
@@ -49,6 +49,10 @@ Versions are `<ours>-<blue-falcon-core>` — `1.0.0-3.0.3` means "our
 - `libsystemd` at link and runtime (sdbus-kotlin links against it).
 - Access to the system D-Bus (`bluetooth` group membership or an
   equivalent policy that grants access to `org.bluez`).
+- **JDK 17 or newer** if you consume the `jvm` artifact — it is compiled
+  with `jvmToolchain(17)`, so an older JVM fails with
+  `UnsupportedClassVersionError`. The native targets have no JDK
+  requirement at runtime.
 
 Your consuming native binary needs linker flags pointing at
 `libsystemd`. The path differs by distro — the example below covers
@@ -174,10 +178,16 @@ Return `null` to give up; the engine then rethrows the original error.
 |                    | Version |
 |--------------------|---------|
 | Gradle             | 9.4.1   |
-| Kotlin             | 2.4.0   |
+| Kotlin             | 2.4.10  |
 | blue-falcon-core   | 3.4.1   |
-| sdbus-kotlin       | 0.4.5   |
-| kotlinx-coroutines | 1.10.2  |
+| sdbus-kotlin       | 1.0.1   |
+| kotlinx-coroutines | 1.11.0  |
+| kotlinx-serialization | 1.11.0 |
+
+This table describes **1.2.3-3.4.1**, the release the Install snippet
+above pins. For any other release, `CHANGELOG.md` records the versions
+that shipped with it — this table is not a compatibility matrix across
+versions.
 
 ## Contributing
 
