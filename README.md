@@ -181,7 +181,7 @@ Return `null` to give up; the engine then rethrows the original error.
 
 ## Contributing
 
-The integration test module at `:integration-tests` runs 14 BLE tests
+The integration test module at `:integration-tests` runs the BLE suite
 against the
 [BF-Test](https://github.com/Monkopedia/bf-test-peripheral) ESP32-C6
 reference peripheral. It's opt-in — add `-PrunIntegrationTests=true`:

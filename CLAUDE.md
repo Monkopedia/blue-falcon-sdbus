@@ -32,7 +32,7 @@ runbook; `CHANGELOG.md` follows Keep a Changelog.
   `engine/src/dbus/*.xml` are compiled to proxy/adapter classes
   (`...sdbus.bluez` package) by the sdbus-kotlin Gradle plugin at build
   time — **don't hand-edit generated code; edit the XML and regenerate.**
-- **`:integration-tests`** — 14 BLE tests against the
+- **`:integration-tests`** — the live BLE suite, run against the
   [BF-Test](https://github.com/Monkopedia/bf-test-peripheral) ESP32-C6
   reference peripheral. Hardware-gated (see below).
 
