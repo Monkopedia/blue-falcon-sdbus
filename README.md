@@ -174,10 +174,14 @@ Return `null` to give up; the engine then rethrows the original error.
 |                    | Version |
 |--------------------|---------|
 | Gradle             | 9.4.1   |
-| Kotlin             | 2.4.0   |
+| Kotlin             | 2.4.10  |
 | blue-falcon-core   | 3.4.1   |
-| sdbus-kotlin       | 0.4.5   |
-| kotlinx-coroutines | 1.10.2  |
+| sdbus-kotlin       | 1.0.1   |
+| kotlinx-coroutines | 1.11.0  |
+
+These are the versions the current release is built and tested against;
+`gradle/libs.versions.toml` is the source of truth if this table and it
+ever disagree.
 
 ## Contributing
 
