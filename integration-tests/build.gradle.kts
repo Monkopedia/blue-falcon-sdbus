@@ -55,4 +55,19 @@ val runIntegration = providers.gradleProperty("runIntegrationTests").orNull == "
 tasks.matching { task ->
     task.name == "linuxX64Test" || task.name == "linuxArm64Test" ||
         task.name == "jvmTest" || task.name == "nativeTest" || task.name == "allTests"
-}.configureEach { enabled = runIntegration }
+}.configureEach {
+    enabled = runIntegration
+
+    // What makes these tests pass is a physical peripheral in RF range, and
+    // that can't be declared as a task input — so a successful run must never
+    // be treated as reproducible. Without this, re-running on an unchanged
+    // commit reports UP-TO-DATE (and `jvmTest`, being a relocatable
+    // @CacheableTask, can even replay FROM-CACHE into a different checkout on
+    // the same host), so the build says BUILD SUCCESSFUL without touching the
+    // radio. Since these tasks only run when -PrunIntegrationTests=true is
+    // passed explicitly, always re-running them is exactly what was asked for.
+    if (runIntegration) {
+        outputs.upToDateWhen { false }
+        outputs.cacheIf { false }
+    }
+}

@@ -14,10 +14,16 @@ to tag:
 - [ ] `:engine:build` green on GitHub Actions on that commit.
 - [ ] `./gradlew :integration-tests:linuxX64Test -PrunIntegrationTests=true`
       run against a live [BF-Test](https://github.com/Monkopedia/bf-test-peripheral)
-      peripheral; **all 14 tests pass**. Integration tests cannot run in
+      peripheral; **all 15 tests pass**. Integration tests cannot run in
       CI — they need real hardware. Record the host you ran on in the
       changelog entry (e.g. "verified on adolin / Arch Linux /
       BlueZ 5.86").
+
+      The gated test tasks are configured to never report `UP-TO-DATE` or
+      `FROM-CACHE`, so a repeat run on an unchanged commit really does
+      re-drive the radio. Sanity-check the wall clock anyway: the live
+      suite takes minutes, so a green that comes back in seconds is not a
+      hardware run.
 - [ ] `gradle.properties` `version=` matches the tag you're about to
       push (without the `v` prefix).
 - [ ] `CHANGELOG.md` has a dated `## [x.y.z-core] - YYYY-MM-DD` heading
