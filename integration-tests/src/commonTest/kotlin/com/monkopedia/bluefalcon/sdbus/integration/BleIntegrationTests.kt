@@ -48,8 +48,13 @@ class BleIntegrationTests {
             device.name == BfTestConstants.DEVICE_NAME
         }
         e.connect(found)
-        waitForServices(found, timeoutMs = 15_000L)
+        // Record the peripheral BEFORE waiting for services. The ACL is
+        // already up at this point, so if waitForServices times out, tearDown
+        // still needs to see the peripheral in order to disconnect it —
+        // otherwise a service-resolution failure leaves the connection
+        // established for the next test to trip over.
         peripheral = found
+        waitForServices(found, timeoutMs = 15_000L)
     }
 
     @AfterTest
