@@ -37,7 +37,8 @@ import kotlin.time.TimeSource
  * Keying on the *attempt* rather than on cumulative elapsed time is what makes
  * this safe. A cumulative budget has to be larger than the whole retry
  * sequence, which puts it uncomfortably close to the sequence's own worst case
- * (~10.8s of backoff alone) and makes it sensitive to machine load — so a slow
+ * (~10.8s: 6s of backoff plus the attempts themselves) and makes it
+ * sensitive to machine load — so a slow
  * but genuinely recovering race could be abandoned. Per-attempt, the race path
  * cannot be truncated at all, however deep the retries go or however loaded
  * the machine is, because no individual racing attempt comes close to
@@ -63,10 +64,19 @@ internal object HarnessConnectRetry {
     const val MAX_ATTEMPTS = 3
 
     /**
-     * Ceiling on a *single* connect attempt. An order of magnitude above the
-     * slowest observed race attempt (~1.2s) and an order of magnitude below
-     * BlueZ's absent-device timeout (~48s), so it is insensitive to exactly
-     * where it sits between them.
+     * Ceiling on a *single* connect attempt: **12.5x above** the slowest
+     * observed race attempt (~1.2s), **3.2x below** BlueZ's absent-device
+     * timeout (~48s; 47s measured).
+     *
+     * The margin is deliberately lopsided, and a future reader changing this
+     * constant should know why rather than reading it as slack. The race side
+     * is the variable one — it grows with machine load, adapter state and how
+     * messy the preceding disconnect was — so that is where the headroom
+     * belongs. The absent-device side is a fixed BlueZ timeout that does not
+     * move under load, so 3.2x is ample there and is not headroom to spend.
+     *
+     * **Raising this materially eats the race-side margin first**, which is
+     * the side that actually fails. Lower it before raising it.
      */
     private val ATTEMPT_BUDGET = 15.seconds
 
