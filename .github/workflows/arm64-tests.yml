@@ -119,4 +119,28 @@ jobs:
           fi
           chmod +x "$BIN"
           file "$BIN"
-          "$BIN"
+
+          # Run it, but do NOT treat exit 0 as the assertion. A test binary
+          # built with no tests exits 0 and reports "0 tests" — which is the
+          # exact defect this workflow exists to catch, so relying on the
+          # exit code alone would reproduce it here.
+          "$BIN" | tee arm64-test-output.txt
+
+          # PIPESTATUS, not $?: the pipe above makes $? tee's status.
+          if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+            echo "::error::linuxArm64 tests failed"
+            exit 1
+          fi
+
+          # Kotlin/Native prints: "[==========] N tests from M test cases ran."
+          RAN="$(sed -n 's/.*\[==========\] \([0-9][0-9]*\) tests\? from .*/\1/p' \
+                 arm64-test-output.txt | tail -n 1)"
+          if [ -z "$RAN" ]; then
+            echo "::error::no test-summary line found — the binary ran but reported nothing"
+            exit 1
+          fi
+          if [ "$RAN" -lt 1 ]; then
+            echo "::error::linuxArm64 binary executed $RAN tests; a green run here would measure nothing"
+            exit 1
+          fi
+          echo "linuxArm64 executed $RAN tests"
