@@ -6,12 +6,17 @@ import dev.bluefalcon.core.BluetoothPeripheral
 import dev.bluefalcon.core.BluetoothPeripheralState
 import dev.bluefalcon.core.PrintLnLogger
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
@@ -171,6 +176,47 @@ class BleIntegrationTests {
     }
 
     // ---- Notifications ----
+
+    /**
+     * A failed `StartNotify` must not leave a collector running.
+     *
+     * Char A (`bfa1`) is declared read-only, so BlueZ rejects `StartNotify`
+     * with `org.bluez.Error.NotSupported` — the only way to reach
+     * `toggleNotifications`' failure path against this peripheral without a
+     * firmware change.
+     *
+     * The assertion works because BlueZ emits `PropertiesChanged{Value}` on
+     * every `ReadValue`, even with no notify session active, and the engine's
+     * *only* producer for [BluetoothCharacteristic.notifications] is the
+     * collector launched in `toggleNotifications` — `readCharacteristic` sets
+     * the cached value directly and never emits. So any emission here proves
+     * the failed enable stranded a collector.
+     *
+     * Note the weaker assertion (`isNotifying == false` after the throw) is
+     * vacuous: it holds identically with and without the fix.
+     */
+    @Test
+    fun failedNotifyEnableStrandsNoCollector(): Unit = runBlocking {
+        val charA = findChar(BfTestConstants.CHAR_A_READ)
+
+        assertFailsWith<Exception>("StartNotify on a read-only characteristic should fail") {
+            engine().notifyCharacteristic(peripheral(), charA, true)
+        }
+
+        val stray = withTimeoutOrNull(5_000L) {
+            charA.notifications
+                .onSubscription {
+                    repeat(3) { engine().readCharacteristic(peripheral(), charA) }
+                }
+                .first()
+        }
+
+        assertNull(
+            stray,
+            "A failed notifyCharacteristic left a collector emitting on notifications; " +
+                "it should have been cancelled when StartNotify threw",
+        )
+    }
 
     @Test
     fun charDNotifications(): Unit = runBlocking {
