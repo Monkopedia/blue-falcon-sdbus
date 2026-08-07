@@ -1,7 +1,8 @@
 package com.monkopedia.bluefalcon.sdbus.integration
 
+import com.monkopedia.bluefalcon.sdbus.SdbusEngine
+import dev.bluefalcon.core.BluetoothPeripheral
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
@@ -10,70 +11,84 @@ import kotlin.time.TimeSource
  * from the engine's production default.**
  *
  * The production default in `SdbusEngineConfig` retries the transient BlueZ
- * `le-connection-abort-by-local` race up to [PRODUCTION_MAX_ATTEMPTS] times
- * with linear 1s/2s/3s backoff. That is right for an application. It is not
- * right for this suite, because BlueZ reports the *same* error when the
- * peripheral is simply absent — after burning its own ~48s connect timeout on
- * every attempt. The production policy therefore spends ~198s per test before
- * failing, roughly 50 minutes across the suite, in silence. A suite that takes
- * 50 minutes to tell you the device is switched off is not a usable failure
- * signal, which is the only reason to run it.
+ * `le-connection-abort-by-local` race up to [MAX_ATTEMPTS] times with linear
+ * 1s/2s/3s backoff. That is right for an application. It is not right for this
+ * suite, because BlueZ reports the *same* error when the peripheral is simply
+ * absent — after burning its own ~48s connect timeout on every attempt. The
+ * production policy therefore spends ~198s per test before failing, roughly 50
+ * minutes across the suite, in silence. A suite that takes 50 minutes to tell
+ * you the device is switched off is not a usable failure signal, which is the
+ * only reason to run it.
  *
- * **The lever is elapsed time, not attempt count.** Cutting attempts was tried
- * first and measurably broke the suite: `writeNoResponse` failed against real
- * hardware in 3.006s, having exhausted a one-retry budget on a race that the
- * production policy absorbs. The two situations need different treatment and
- * they are cheaply distinguishable, because they differ by more than an order
- * of magnitude:
+ * **The discriminator is per-attempt duration, and it is physical.** The two
+ * situations differ by more than an order of magnitude in how long a single
+ * attempt takes:
  *
- * | situation | per attempt | measured |
- * |---|---|---|
- * | transient race after a disconnect | ~1.2s | 3.006s across 2 attempts |
- * | peripheral absent | ~48s (BlueZ's own timeout) | ~198s across 4 attempts |
+ * | situation | one attempt |
+ * |---|---|
+ * | transient race after a disconnect | ~0.5–1.2s (measured: 2/16 forced rounds raced, both firing at ~490ms and clearing on the next attempt) |
+ * | peripheral absent | ~48s — BlueZ's own connect timeout |
  *
- * So this policy keeps production's attempt count and adds a wall-clock
- * [BUDGET] measured from the start of the connect. A race retries exactly as
- * it would in production; an absent peripheral fails after one attempt,
- * because one attempt already blew the budget.
+ * So this policy retries **exactly as production does** — same attempt count,
+ * same `attempt.seconds` backoff — and adds one extra way to stop: if a single
+ * attempt itself burned more than [ATTEMPT_BUDGET], the peripheral is absent
+ * rather than racing, and further attempts will only burn ~48s each.
  *
- * Failing suite goes from ~50 minutes to ~12 — bounded by BlueZ's ~48s connect
- * timeout, which the harness cannot shorten from here. Bounding *that* would
- * mean wrapping `connect()` in a `withTimeout`, which risks leaving BlueZ
- * mid-connect (the documented wedge state). Not attempted.
+ * Keying on the *attempt* rather than on cumulative elapsed time is what makes
+ * this safe. A cumulative budget has to be larger than the whole retry
+ * sequence, which puts it uncomfortably close to the sequence's own worst case
+ * (~10.8s of backoff alone) and makes it sensitive to machine load — so a slow
+ * but genuinely recovering race could be abandoned. Per-attempt, the race path
+ * cannot be truncated at all, however deep the retries go or however loaded
+ * the machine is, because no individual racing attempt comes close to
+ * [ATTEMPT_BUDGET].
  *
+ * An earlier version of this cut the attempt count instead, and measurably
+ * broke the suite: `writeNoResponse` failed against real hardware in 3.006s,
+ * having exhausted a shortened budget on a race the production policy absorbs.
+ * That is the failure mode this design exists to avoid, and it is why the
+ * backoff must stay at production's `attempt.seconds`.
+ *
+ * A fully-failing suite goes from ~50 minutes to ~12 — bounded by BlueZ's ~48s
+ * connect timeout, which the harness cannot shorten from here. Bounding *that*
+ * would mean wrapping `connect()` in a `withTimeout`, which risks leaving
+ * BlueZ mid-connect (the documented wedge state). Not attempted.
+ *
+ * @see connect the only supported entry point
  * @see announce for the output that tells a reader this policy was in effect
  */
 internal object HarnessConnectRetry {
 
-    /** What `SdbusEngineConfig` uses in production. Documentation only. */
-    const val PRODUCTION_MAX_ATTEMPTS = 3
-
-    /** Matched to production — the budget below does the real work. */
-    const val MAX_ATTEMPTS = PRODUCTION_MAX_ATTEMPTS
+    /** Matched to production; the per-attempt budget does the extra work. */
+    const val MAX_ATTEMPTS = 3
 
     /**
-     * Wall-clock budget from the start of the connect. Comfortably above any
-     * observed transient recovery (~3s, plus backoff) and far below a single
-     * absent-device attempt (~48s), so it separates them without being
-     * sensitive to where exactly it sits between the two.
+     * Ceiling on a *single* connect attempt. An order of magnitude above the
+     * slowest observed race attempt (~1.2s) and an order of magnitude below
+     * BlueZ's absent-device timeout (~48s), so it is insensitive to exactly
+     * where it sits between them.
      */
-    private val BUDGET = 15.seconds
+    private val ATTEMPT_BUDGET = 15.seconds
 
-    private val BACKOFF = 500.milliseconds
-
-    private var connectStartedAt: TimeSource.Monotonic.ValueTimeMark? = null
+    private var attemptMark: TimeSource.Monotonic.ValueTimeMark? = null
+    private var pendingBackoff: Duration = Duration.ZERO
 
     /**
-     * Call immediately before `connect()`. Starts the [BUDGET] clock, so
-     * elapsed time on the first failure is the duration of the first attempt
-     * — which is the signal that separates a race from an absent device.
+     * Connect through the harness policy. **The only supported entry point** —
+     * the per-attempt clock starts here, so calling [SdbusEngine.connect]
+     * directly would leave the budget silently inapplicable (or, worse,
+     * applied against a stale mark from a previous test).
      */
-    fun beginConnect() {
-        connectStartedAt = TimeSource.Monotonic.markNow()
+    suspend fun connect(engine: SdbusEngine, peripheral: BluetoothPeripheral) {
+        attemptMark = TimeSource.Monotonic.markNow()
+        pendingBackoff = Duration.ZERO
+        engine.connect(peripheral)
     }
 
     /**
-     * Retries the same error the production default retries, within [BUDGET].
+     * Retries the same error the production default retries, on the same
+     * schedule, unless the failing attempt took long enough to prove the
+     * peripheral is absent.
      *
      * Matches on the message alone, where the production default also checks
      * `error is SdbusException`. `sdbus-kotlin` is an `implementation`
@@ -87,17 +102,23 @@ internal object HarnessConnectRetry {
         if ("le-connection-abort-by-local" !in message) return null
         if (attempt > MAX_ATTEMPTS) return null
 
-        val elapsed = connectStartedAt?.elapsedNow()
-        if (elapsed != null && elapsed > BUDGET) {
+        // elapsedNow() spans the backoff we asked for plus the attempt that
+        // followed it; subtract the backoff to get the attempt alone.
+        val attemptTook = attemptMark?.let { it.elapsedNow() - pendingBackoff }
+        if (attemptTook != null && attemptTook > ATTEMPT_BUDGET) {
             println(
-                "[harness] giving up after $attempt attempt(s): ${elapsed.inWholeSeconds}s " +
-                    "elapsed exceeds the ${BUDGET.inWholeSeconds}s budget, so this is an " +
-                    "unreachable peripheral rather than the transient reconnect race. " +
-                    "Production would keep retrying here.",
+                "[harness] giving up after $attempt attempt(s): that attempt alone took " +
+                    "${attemptTook.inWholeSeconds}s, past the ${ATTEMPT_BUDGET.inWholeSeconds}s " +
+                    "per-attempt budget, so this is an unreachable peripheral rather than the " +
+                    "transient reconnect race. Production would keep retrying here.",
             )
             return null
         }
-        return BACKOFF
+
+        val backoff = attempt.seconds // production parity — the race is time-driven
+        attemptMark = TimeSource.Monotonic.markNow()
+        pendingBackoff = backoff
+        return backoff
     }
 
     private var announced = false
@@ -117,10 +138,11 @@ internal object HarnessConnectRetry {
         if (announced) return
         announced = true
         println(
-            "[harness] connect-retry bounded by a ${BUDGET.inWholeSeconds}s wall-clock " +
-                "budget (production: $PRODUCTION_MAX_ATTEMPTS retries, unbounded in time). " +
-                "The transient reconnect race still retries; an unreachable peripheral " +
-                "fails after one attempt instead of four.",
+            "[harness] connect-retry matches production (${MAX_ATTEMPTS} retries, " +
+                "1s/2s/3s backoff) but stops early if a single attempt exceeds " +
+                "${ATTEMPT_BUDGET.inWholeSeconds}s. The transient reconnect race retries " +
+                "exactly as it would in production; an unreachable peripheral fails after " +
+                "one attempt instead of four.",
         )
     }
 }
