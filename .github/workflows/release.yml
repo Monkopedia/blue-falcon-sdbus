@@ -6,13 +6,20 @@ on:
       - 'v*'
 
 jobs:
-  publish:
+  # SPIKE (#31, half A): this job did not exist. `release.yml` used to be a
+  # single `publish` job whose only gates were two string comparisons, and
+  # `./gradlew :engine:publishToMavenCentral` pulls in *zero* test or check
+  # tasks (measured: 67 tasks in that graph, 0 of them test/check; positive
+  # control — `:engine:build` has 4). `build.yml` is never triggered by a tag
+  # push (`on: push: branches: [main]`), so nothing on the tag path compiles
+  # or tests the tree that is about to be published.
+  verify:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write  # so GITHUB_TOKEN can create a GitHub Release
     steps:
       - uses: actions/checkout@v4
 
+      # The two pre-existing string gates move here so they still fail fast,
+      # before the ~2 minutes of compiling below.
       - name: Verify tag matches gradle.properties version
         run: |
           set -euo pipefail
@@ -34,6 +41,38 @@ jobs:
             exit 1
           fi
           echo "Changelog entry present for $VERSION"
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install libsystemd-dev
+        run: sudo apt-get update && sudo apt-get install -y libsystemd-dev
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # Deliberately the same two commands `build.yml` runs, so "green on the
+      # tag" means exactly what "green on main" already means. This is the
+      # whole of the added coverage — and see the PR body for why that may be
+      # less than it sounds.
+      - name: Build engine (compile + unit tests, linuxX64 + linuxArm64 + jvm)
+        run: ./gradlew :engine:build
+
+      - name: Link integration-tests binary (linuxX64)
+        run: ./gradlew :integration-tests:linkDebugTestLinuxX64
+
+  publish:
+    # SPIKE (#31, half A): the gate. Without this line the job below runs
+    # regardless of whether anything compiled.
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # so GITHUB_TOKEN can create a GitHub Release
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
