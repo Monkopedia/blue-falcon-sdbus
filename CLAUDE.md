@@ -104,6 +104,11 @@ Consequences for triage/work/review subagents:
   `org.bluez.Error.Failed: le-connection-abort-by-local` race (3 attempts,
   linear backoff) by default. That's intended behavior, not a bug —
   override via `SdbusEngineConfig.onConnectDelay`, don't remove it.
+  `:integration-tests` does exactly that: `HarnessConnectRetry` keeps the
+  production attempt count but bounds it with a wall-clock budget, because
+  BlueZ reports the *same* error when the peripheral is simply absent, after
+  burning ~48s per attempt. Without the bound a fully-failing suite runs ~50
+  silent minutes. **The production default is unchanged and must stay so.**
 
 ## Review & merge policy
 

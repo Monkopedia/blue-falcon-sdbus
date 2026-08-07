@@ -36,10 +36,16 @@ class BleIntegrationTests {
 
     @BeforeTest
     fun setUp() = runBlocking {
-        // SdbusEngine's default onConnectDelay retries the known-transient
-        // BlueZ "le-connection-abort-by-local" up to 3 times, so setUp
-        // doesn't need its own retry loop.
-        val e = SdbusEngine { logger = PrintLnLogger }
+        // The harness overrides onConnectDelay: production's retry schedule,
+        // plus a per-attempt ceiling that distinguishes an absent peripheral
+        // from the transient BlueZ race. See HarnessConnectRetry for why, and
+        // for what it does and does not buy. Connect through it, not through
+        // engine.connect() — that is where the per-attempt clock starts.
+        HarnessConnectRetry.announce()
+        val e = SdbusEngine {
+            logger = PrintLnLogger
+            onConnectDelay = HarnessConnectRetry::onConnectDelay
+        }
         engine = e
         val h = EngineTestHarness(e)
         harness = h
@@ -47,7 +53,7 @@ class BleIntegrationTests {
         val found = h.scanForDevice(timeoutMs = 120_000L) { device ->
             device.name == BfTestConstants.DEVICE_NAME
         }
-        e.connect(found)
+        HarnessConnectRetry.connect(e, found)
         // Record the peripheral BEFORE waiting for services. The ACL is
         // already up at this point, so if waitForServices times out, tearDown
         // still needs to see the peripheral in order to disconnect it —

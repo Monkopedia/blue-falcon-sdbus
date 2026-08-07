@@ -69,5 +69,14 @@ tasks.matching { task ->
     if (runIntegration) {
         outputs.upToDateWhen { false }
         outputs.cacheIf { false }
+
+        // Surface test stdout on the console. Gradle otherwise captures it
+        // into the XML report, which is where a run's only explanation of
+        // itself goes to be unread — including the harness's notice that it
+        // runs a shorter connect-retry budget than production, and the
+        // engine's own log when a connection misbehaves. This suite is run
+        // by a human watching it against real hardware; its output is the
+        // point.
+        (this as? AbstractTestTask)?.testLogging { showStandardStreams = true }
     }
 }
