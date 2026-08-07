@@ -75,8 +75,9 @@ internal object HarnessConnectRetry {
      * belongs. The absent-device side is a fixed BlueZ timeout that does not
      * move under load, so 3.2x is ample there and is not headroom to spend.
      *
-     * **Raising this materially eats the race-side margin first**, which is
-     * the side that actually fails. Lower it before raising it.
+     * **Lowering this materially eats the race-side margin first**, which is the
+     * side that actually fails — and the race side is the variable one. Raise it
+     * before lowering it.
      */
     private val ATTEMPT_BUDGET = 15.seconds
 
