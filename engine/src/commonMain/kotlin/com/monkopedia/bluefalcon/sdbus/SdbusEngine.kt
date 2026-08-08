@@ -107,7 +107,13 @@ class SdbusEngine internal constructor(
 
     private val initJob = scope.launch {
         // Wait for any previous instance's event loop to fully shut down
-        // before opening a new D-Bus connection on this process.
+        // before starting a new one on this process. Note that this does NOT
+        // serialise the connection open: `connection` above is a property
+        // initializer, so the new system bus connection is already open by the
+        // time this join runs. Two Connection objects coexisting is fine; two
+        // event loops racing over a shutting-down bus is not, and that is what
+        // this wait covers — proxy creation, startEventLoop() and agent
+        // registration all happen after it.
         pendingShutdown?.join()
         pendingShutdown = null
 
@@ -440,7 +446,9 @@ class SdbusEngine internal constructor(
      * Not part of [BlueFalconEngine], but exposed so tests and long-running
      * applications can cleanly release the system bus connection. A new
      * [SdbusEngine] constructed after destroy() will wait for the previous
-     * event loop to stop before opening its own.
+     * event loop to stop before starting its own. Its D-Bus connection is
+     * opened eagerly in the constructor, so the two connections can briefly
+     * overlap; only the event loops are serialised.
      */
     fun destroy() {
         isScanning = false
