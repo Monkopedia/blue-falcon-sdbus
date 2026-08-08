@@ -15,7 +15,8 @@ import kotlin.time.Duration.Companion.seconds
  *
  * The default deliberately retries only the transient BlueZ
  * `org.bluez.Error.Failed: le-connection-abort-by-local` race — up to 3
- * attempts with linear (1s / 2s / 3s) backoff — and gives up on anything else.
+ * retries with linear (1s / 2s / 3s) backoff, so 4 `Connect()` calls in total
+ * — and gives up on anything else.
  */
 class SdbusEngineConfigTest {
 
@@ -33,7 +34,7 @@ class SdbusEngineConfigTest {
     }
 
     @Test
-    fun givesUpAfterThreeAttempts() = runTest {
+    fun givesUpAfterThreeRetries() = runTest {
         assertNull(retry(4, abortByLocal()), "there is no fourth retry for the transient race")
     }
 

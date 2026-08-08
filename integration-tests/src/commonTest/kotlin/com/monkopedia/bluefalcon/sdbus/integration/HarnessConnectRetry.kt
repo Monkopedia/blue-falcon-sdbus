@@ -11,7 +11,7 @@ import kotlin.time.TimeSource
  * from the engine's production default.**
  *
  * The production default in `SdbusEngineConfig` retries the transient BlueZ
- * `le-connection-abort-by-local` race up to [MAX_ATTEMPTS] times with linear
+ * `le-connection-abort-by-local` race up to [MAX_RETRIES] times with linear
  * 1s/2s/3s backoff. That is right for an application. It is not right for this
  * suite, because BlueZ reports the *same* error when the peripheral is simply
  * absent — after burning its own ~48s connect timeout on every attempt. The
@@ -60,8 +60,12 @@ import kotlin.time.TimeSource
  */
 internal object HarnessConnectRetry {
 
-    /** Matched to production; the per-attempt budget does the extra work. */
-    const val MAX_ATTEMPTS = 3
+    /**
+     * Retries, not attempts — it is only ever used as `attempt > MAX_RETRIES`,
+     * so it permits 4 `Connect()` calls. Matched to production; the per-attempt
+     * budget does the extra work.
+     */
+    const val MAX_RETRIES = 3
 
     /**
      * Ceiling on a *single* connect attempt: **12.5x above** the slowest
@@ -111,7 +115,7 @@ internal object HarnessConnectRetry {
     suspend fun onConnectDelay(attempt: Int, error: Throwable): Duration? {
         val message = error.message ?: return null
         if ("le-connection-abort-by-local" !in message) return null
-        if (attempt > MAX_ATTEMPTS) return null
+        if (attempt > MAX_RETRIES) return null
 
         // elapsedNow() spans the backoff we asked for plus the attempt that
         // followed it; subtract the backoff to get the attempt alone.
@@ -149,7 +153,7 @@ internal object HarnessConnectRetry {
         if (announced) return
         announced = true
         println(
-            "[harness] connect-retry matches production (${MAX_ATTEMPTS} retries, " +
+            "[harness] connect-retry matches production (${MAX_RETRIES} retries, " +
                 "1s/2s/3s backoff) but stops early if a single attempt exceeds " +
                 "${ATTEMPT_BUDGET.inWholeSeconds}s. The transient reconnect race retries " +
                 "exactly as it would in production; an unreachable peripheral fails after " +

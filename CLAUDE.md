@@ -101,8 +101,9 @@ Consequences for triage/work/review subagents:
   background thread or hangs the process. Treat lifecycle/teardown
   changes as high-risk.
 - **Connect retry:** `connect()` deliberately retries the transient
-  `org.bluez.Error.Failed: le-connection-abort-by-local` race (3 attempts,
-  linear backoff) by default. That's intended behavior, not a bug —
+  `org.bluez.Error.Failed: le-connection-abort-by-local` race (3 retries,
+  i.e. 4 `Connect()` calls, with linear 1s/2s/3s backoff) by default. That's
+  intended behavior, not a bug —
   override via `SdbusEngineConfig.onConnectDelay`, don't remove it.
   `:integration-tests` does exactly that: `HarnessConnectRetry` keeps the
   production attempt count but bounds it with a wall-clock budget, because
