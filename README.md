@@ -205,14 +205,6 @@ run locally on a Linux host with a flashed BF-Test device in range.
 
 Release process lives in [RELEASING.md](RELEASING.md).
 
-Known rough edges in the tooling that this project works around:
-
-- [sdbus-kotlin#9](https://github.com/Monkopedia/sdbus-kotlin/issues/9) —
-  the KMP root `sourcesJar` doesn't declare the sdbus generator as an
-  input, which Gradle 9 rejects. `engine/build.gradle.kts` has a small
-  `tasks.matching { ... }.dependsOn("generateSdbusWrappers")` shim to
-  cover it; remove once upstream ships a fix.
-
 ## License
 
 Apache 2.0. See [LICENSE](LICENSE).
