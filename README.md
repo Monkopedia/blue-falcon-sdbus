@@ -177,11 +177,16 @@ Return `null` to give up; the engine then rethrows the original error.
 
 By default the engine registers a NoInputNoOutput ("Just Works") pairing
 agent with BlueZ on startup and calls `RequestDefaultAgent`, which makes
-the process `bluetoothd`'s **default pairing agent for the whole host** —
-displacing the desktop's pairing prompt or `bluetoothctl`'s agent for
-every application on the machine, and auto-accepting the pairing requests
-it is asked about. That is what makes `createBond` work without a
-PIN/passkey callback surface.
+the process `bluetoothd`'s **default pairing agent for the whole host**,
+auto-accepting the pairing requests it is asked about. That is what makes
+`createBond` work without a PIN/passkey callback surface.
+
+The default agent is the one BlueZ falls back to for pairing that isn't
+already served by a client's own agent — so a desktop environment or
+`bluetoothctl` session that has registered an agent keeps handling its own
+prompts, while anything relying on the host default now gets ours, silently
+accepted. It is still a host-wide role, and taking it is still a policy
+decision on behalf of the whole machine.
 
 `destroy()` hands the role back with `UnregisterAgent`.
 
