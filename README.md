@@ -181,14 +181,20 @@ the process `bluetoothd`'s **default pairing agent for the whole host**,
 auto-accepting the pairing requests it is asked about. That is what makes
 `createBond` work without a PIN/passkey callback surface.
 
-The default agent is the one BlueZ falls back to for pairing that isn't
-already served by a client's own agent — so a desktop environment or
-`bluetoothctl` session that has registered an agent keeps handling its own
-prompts, while anything relying on the host default now gets ours, silently
-accepted. It is still a host-wide role, and taking it is still a policy
-decision on behalf of the whole machine.
+The default agent is the one BlueZ routes to whenever the pairing is not
+being driven by a client that registered its own agent. A desktop or
+`bluetoothctl` session that initiates a pairing itself still uses its own
+agent — but **pairing requests initiated by a remote peer, and
+service-authorization requests, always go to the host default**, which is
+now ours, and are silently accepted. That is the case a desktop pairing
+prompt exists to serve.
 
-`destroy()` hands the role back with `UnregisterAgent`.
+Taking the role also sets the adapter's IO capability to `NoInputNoOutput`
+for all pairing on that adapter, not just ours.
+
+`destroy()` hands the role back with `UnregisterAgent`. BlueZ keeps the
+default agents in a stack, so the previous holder — the desktop's agent, if
+there was one — is restored, along with the adapter's IO capability.
 
 If your application shouldn't take over host pairing policy, opt out:
 

@@ -45,12 +45,23 @@ class SdbusEngineConfig {
      * When true (the default), the engine registers a NoInputNoOutput
      * ("Just Works") pairing agent with BlueZ at startup **and calls
      * `RequestDefaultAgent`**, which makes this process `bluetoothd`'s
-     * *default* pairing agent — a host-wide role. While it holds that
-     * role it displaces whatever agent the machine had (the desktop's
-     * pairing prompt, `bluetoothctl`'s interactive agent, …) for *every*
-     * application on the host, and it answers "yes" to every pairing and
-     * service-authorization request it is asked about. [SdbusEngine.destroy]
-     * hands the role back.
+     * *default* pairing agent — a host-wide role — and answers "yes" to
+     * every request it is asked about.
+     *
+     * The default agent is the one BlueZ routes to whenever the pairing is
+     * not being driven by a client that registered its own agent. A desktop
+     * or `bluetoothctl` session that initiates a pairing itself still uses
+     * its own agent — but **pairing requests initiated by a remote peer, and
+     * service-authorization requests, always go to the host default**, which
+     * is now ours, and are silently accepted. That is the case a desktop
+     * pairing prompt exists to serve.
+     *
+     * Taking the role also sets the adapter's IO capability to
+     * `NoInputNoOutput` for all pairing on that adapter, not just ours.
+     *
+     * [SdbusEngine.destroy] hands the role back: BlueZ keeps the default
+     * agents in a stack and restores the previous holder on
+     * `UnregisterAgent`, which also restores the IO capability.
      *
      * This is on by default because `createBond` needs an agent to answer
      * BlueZ's pairing prompts, and because it is the behaviour every
