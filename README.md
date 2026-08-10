@@ -173,6 +173,31 @@ val engine = SdbusEngine {
 
 Return `null` to give up; the engine then rethrows the original error.
 
+## Pairing agent
+
+By default the engine registers a NoInputNoOutput ("Just Works") pairing
+agent with BlueZ on startup and calls `RequestDefaultAgent`, which makes
+the process `bluetoothd`'s **default pairing agent for the whole host** —
+displacing the desktop's pairing prompt or `bluetoothctl`'s agent for
+every application on the machine, and auto-accepting the pairing requests
+it is asked about. That is what makes `createBond` work without a
+PIN/passkey callback surface.
+
+`destroy()` hands the role back with `UnregisterAgent`.
+
+If your application shouldn't take over host pairing policy, opt out:
+
+```kotlin
+val engine = SdbusEngine {
+    registerDefaultPairingAgent = false
+}
+```
+
+With it off, no agent object is published and `RequestDefaultAgent` is
+never called. Pairing that BlueZ needs an agent for — including
+`createBond` on a host with no other agent registered — then fails
+instead of being auto-accepted.
+
 ## Compatibility
 
 |                    | Version |

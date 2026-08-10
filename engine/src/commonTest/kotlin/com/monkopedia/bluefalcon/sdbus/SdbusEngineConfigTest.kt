@@ -4,14 +4,16 @@ import com.monkopedia.sdbus.SdbusException
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Unit tests for [SdbusEngineConfig]'s default connect-retry policy, exercised
- * through the public [SdbusEngineConfig.onConnectDelay] default. Pure
- * `(attempt, error) -> Duration?` logic, no D-Bus, so these run on every target
- * without hardware.
+ * Unit tests for [SdbusEngineConfig]'s defaults — chiefly the connect-retry
+ * policy, exercised through the public [SdbusEngineConfig.onConnectDelay]
+ * default. Pure `(attempt, error) -> Duration?` logic, no D-Bus, so these run
+ * on every target without hardware.
  *
  * The default deliberately retries only the transient BlueZ
  * `org.bluez.Error.Failed: le-connection-abort-by-local` race — up to 3
@@ -57,5 +59,29 @@ class SdbusEngineConfigTest {
     @Test
     fun doesNotRetryErrorWithNoMessage() = runTest {
         assertNull(retry(1, Throwable()), "a message-less error is not retried")
+    }
+
+    /**
+     * The pairing-agent opt-out is deliberately default-on: turning the
+     * default into `false` would silently take the auto-accepting agent
+     * away from every existing caller of `createBond`. Whether the engine
+     * then actually talks to `org.bluez.AgentManager1` needs D-Bus and is
+     * not testable here; the default value is.
+     */
+    @Test
+    fun registersDefaultPairingAgentByDefault() {
+        assertTrue(
+            SdbusEngineConfig().registerDefaultPairingAgent,
+            "a bare SdbusEngine {} must keep the pre-existing agent behaviour",
+        )
+    }
+
+    @Test
+    fun pairingAgentRegistrationCanBeDisabled() {
+        val config = SdbusEngineConfig().apply { registerDefaultPairingAgent = false }
+        assertFalse(
+            config.registerDefaultPairingAgent,
+            "callers must be able to opt out of the host-wide default-agent role",
+        )
     }
 }

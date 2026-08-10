@@ -42,6 +42,29 @@ class SdbusEngineConfig {
     var autoDiscoverAllServicesAndCharacteristics: Boolean = true
 
     /**
+     * When true (the default), the engine registers a NoInputNoOutput
+     * ("Just Works") pairing agent with BlueZ at startup **and calls
+     * `RequestDefaultAgent`**, which makes this process `bluetoothd`'s
+     * *default* pairing agent — a host-wide role. While it holds that
+     * role it displaces whatever agent the machine had (the desktop's
+     * pairing prompt, `bluetoothctl`'s interactive agent, …) for *every*
+     * application on the host, and it answers "yes" to every pairing and
+     * service-authorization request it is asked about. [SdbusEngine.destroy]
+     * hands the role back.
+     *
+     * This is on by default because `createBond` needs an agent to answer
+     * BlueZ's pairing prompts, and because it is the behaviour every
+     * release so far has had.
+     *
+     * Set to false to skip registration entirely — no agent object is
+     * published and `RequestDefaultAgent` is never called, so the host's
+     * existing pairing agent keeps the role. With it off, pairing that
+     * BlueZ needs an agent for (including `createBond` on a host with no
+     * other agent registered) will fail rather than be auto-accepted.
+     */
+    var registerDefaultPairingAgent: Boolean = true
+
+    /**
      * Retry policy for `connect()` failures. Called after each failed
      * attempt; return the [Duration] to wait before retrying, or `null`
      * to give up (the engine then rethrows the original error).

@@ -45,6 +45,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.concurrent.Volatile
 
 /**
  * Linux BlueZ engine for Blue Falcon, implemented on top of sdbus-kotlin.
@@ -70,6 +72,7 @@ class SdbusEngine internal constructor(
     private val autoDiscoverAllServicesAndCharacteristics: Boolean =
         config.autoDiscoverAllServicesAndCharacteristics
     private val adapterName: String = config.adapterName
+    private val registerDefaultPairingAgent: Boolean = config.registerDefaultPairingAgent
 
     override val scope: CoroutineScope =
         CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -95,6 +98,18 @@ class SdbusEngine internal constructor(
     private val adapterPath = ObjectPath("/org/bluez/$adapterName")
     private lateinit var adapterProxy: Adapter1Proxy
     private lateinit var objectManagerProxy: ObjectManagerProxy
+
+    private val agentPath = ObjectPath("/com/monkopedia/bluefalcon/agent")
+
+    /**
+     * Non-null exactly while BlueZ holds our agent: set by [registerAgent]
+     * after `RegisterAgent` returns, cleared by [unregisterAgent]. Tracked
+     * rather than inferred from [registerDefaultPairingAgent], because
+     * registration is allowed to fail. Volatile because it is written on
+     * [scope] and read on the shutdown scope.
+     */
+    @Volatile
+    private var registeredAgentManager: AgentManager1Proxy? = null
 
     private val knownPeripherals = mutableMapOf<ObjectPath, SdbusPeripheral>()
     private val connectedDevices = mutableMapOf<ObjectPath, ConnectedDevice>()
@@ -122,11 +137,12 @@ class SdbusEngine internal constructor(
             createProxy(connection, bluezService, ObjectPath("/"))
         )
         connection.startEventLoop()
-        registerAgent()
+        if (registerDefaultPairingAgent) {
+            registerAgent()
+        }
     }
 
     private fun registerAgent() {
-        val agentPath = ObjectPath("/com/monkopedia/bluefalcon/agent")
         val agent = NoInputNoOutputAgent(createObject(connection, agentPath))
         agent.register()
         val agentManager = AgentManager1Proxy(
@@ -135,11 +151,40 @@ class SdbusEngine internal constructor(
         scope.launch {
             try {
                 agentManager.registerAgent(agentPath, "NoInputNoOutput")
+                // Recorded here rather than after requestDefaultAgent: once
+                // RegisterAgent has returned, BlueZ holds the agent, and
+                // destroy() has to give it back even if the default-agent
+                // request below fails.
+                registeredAgentManager = agentManager
                 agentManager.requestDefaultAgent(agentPath)
                 logger?.info("Registered NoInputNoOutput pairing agent")
             } catch (e: Exception) {
                 logger?.error("Failed to register pairing agent: ${e.message}", e)
             }
+        }
+    }
+
+    /**
+     * Hands the pairing agent back to BlueZ if — and only if — a
+     * `RegisterAgent` call actually succeeded. Runs on the shutdown scope
+     * *before* `stopEventLoop()`, since the reply needs the event loop.
+     *
+     * Failures are caught and logged, matching how [registerAgent] treats
+     * the symmetric failure: teardown is best-effort and must not throw.
+     * The timeout is there because [destroy] leaves this job behind as
+     * `pendingShutdown`, which the *next* engine's init joins — a wedged
+     * D-Bus reply here would otherwise stall the next construction.
+     */
+    private suspend fun unregisterAgent() {
+        val agentManager = registeredAgentManager ?: return
+        registeredAgentManager = null
+        try {
+            withTimeoutOrNull(AGENT_UNREGISTER_TIMEOUT_MS) {
+                agentManager.unregisterAgent(agentPath)
+                logger?.info("Unregistered NoInputNoOutput pairing agent")
+            } ?: logger?.error("Timed out unregistering pairing agent")
+        } catch (e: Exception) {
+            logger?.error("Failed to unregister pairing agent: ${e.message}", e)
         }
     }
 
@@ -454,7 +499,8 @@ class SdbusEngine internal constructor(
     // ---- Lifecycle ----
 
     /**
-     * Stops scanning, cancels all connections, and shuts down the D-Bus event loop.
+     * Stops scanning, cancels all connections, hands the pairing agent back
+     * to BlueZ if one was registered, and shuts down the D-Bus event loop.
      *
      * Not part of [BlueFalconEngine], but exposed so tests and long-running
      * applications can cleanly release the system bus connection. A new
@@ -471,7 +517,11 @@ class SdbusEngine internal constructor(
         connectedDevices.clear()
         // stopEventLoop() suspends; fire-and-forget on its own scope so
         // destroy() can return. The next engine instance awaits this.
+        // The agent is handed back first, while the event loop that
+        // carries the reply is still running, and on this scope rather
+        // than `scope` so the cancel() below doesn't kill it.
         pendingShutdown = CoroutineScope(Dispatchers.Default).launch {
+            unregisterAgent()
             connection.stopEventLoop()
         }
         scope.cancel()
@@ -596,6 +646,13 @@ class SdbusEngine internal constructor(
 
     private companion object {
         private var pendingShutdown: Job? = null
+
+        /**
+         * Upper bound on the `UnregisterAgent` round-trip during [destroy].
+         * Generous for a local daemon call, short enough that a wedged
+         * bluetoothd can't stall the next engine's construction.
+         */
+        private const val AGENT_UNREGISTER_TIMEOUT_MS = 5_000L
     }
 }
 
