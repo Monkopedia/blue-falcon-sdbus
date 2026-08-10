@@ -354,8 +354,21 @@ class SdbusEngine internal constructor(
                     )
                 }
             }
+            try {
+                charProxy.startNotify()
+            } catch (e: Throwable) {
+                // The collector above is already running. Cancel it here: it
+                // is not yet reachable through char._notifyJob, and the
+                // disable branch below is guarded on isNotifying, which is
+                // still false — so nothing else can ever cancel it. Leaving
+                // it stranded would also double-emit, because a retry
+                // launches a second collector on the same characteristic.
+                job.cancel()
+                throw e
+            }
+            // Assign both together only once StartNotify has succeeded, so
+            // _notifyJob and _isNotifying agree in every outcome.
             char._notifyJob = job
-            charProxy.startNotify()
             char._isNotifying = true
         } else if (!enable && char.isNotifying) {
             charProxy.stopNotify()
