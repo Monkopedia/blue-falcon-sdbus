@@ -49,19 +49,27 @@ class SdbusEngineConfig {
      * every request it is asked about.
      *
      * The default agent is the one BlueZ routes to whenever the pairing is
-     * not being driven by a client that registered its own agent. A desktop
-     * or `bluetoothctl` session that initiates a pairing itself still uses
-     * its own agent — but **pairing requests initiated by a remote peer, and
-     * service-authorization requests, always go to the host default**, which
-     * is now ours, and are silently accepted. That is the case a desktop
-     * pairing prompt exists to serve.
+     * not being driven by a client that registered its own agent. A client
+     * that initiates a pairing still uses its own agent, **provided the same
+     * D-Bus connection both registered the agent and calls `Pair()`** — a
+     * desktop stack that registers its agent in one process and pairs from
+     * another falls through to the host default like any other caller.
      *
-     * Taking the role also sets the adapter's IO capability to
-     * `NoInputNoOutput` for all pairing on that adapter, not just ours.
+     * **Pairing requests initiated by a remote peer, and
+     * service-authorization requests, always go to the host default**, which
+     * is now ours. That is the case a desktop pairing prompt exists to
+     * serve. "Accepted silently" is if anything too gentle: with the IO
+     * capability clamped below, an incoming Secure Simple Pairing can
+     * complete without BlueZ raising *any* agent request at all.
+     *
+     * Taking the role also sets **every adapter's IO capability on the
+     * host** to `NoInputNoOutput`, for all pairing on them and not just
+     * ours — including adapters other than the one [adapterName] selects.
      *
      * [SdbusEngine.destroy] hands the role back: BlueZ keeps the default
      * agents in a stack and restores the previous holder on
-     * `UnregisterAgent`, which also restores the IO capability.
+     * `UnregisterAgent`, which also restores the IO capability on every
+     * adapter.
      *
      * This is on by default because `createBond` needs an agent to answer
      * BlueZ's pairing prompts, and because it is the behaviour every
@@ -69,9 +77,17 @@ class SdbusEngineConfig {
      *
      * Set to false to skip registration entirely — no agent object is
      * published and `RequestDefaultAgent` is never called, so the host's
-     * existing pairing agent keeps the role. With it off, pairing that
-     * BlueZ needs an agent for (including `createBond` on a host with no
-     * other agent registered) will fail rather than be auto-accepted.
+     * existing pairing agent keeps the role *and keeps receiving the
+     * requests*: with the flag off, a remote-initiated pairing is dispatched
+     * to that agent instead of ours. The opt-out delegates rather than
+     * disabling.
+     *
+     * On a host with **no** other agent registered there is nothing to
+     * delegate to, so pairing that BlueZ needs an agent for — including
+     * `createBond` — fails instead of being auto-accepted. Note that on such
+     * a host `RegisterAgent` alone is enough to receive requests; the
+     * `RequestDefaultAgent` call matters when something else is already
+     * holding the role.
      */
     var registerDefaultPairingAgent: Boolean = true
 
