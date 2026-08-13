@@ -178,8 +178,9 @@ Return `null` to give up; the engine then rethrows the original error.
 By default the engine registers a NoInputNoOutput ("Just Works") pairing
 agent with BlueZ on startup and calls `RequestDefaultAgent`, which makes
 the process `bluetoothd`'s **default pairing agent for the whole host**,
-auto-accepting the pairing requests it is asked about. That is what makes
-`createBond` work without a PIN/passkey callback surface.
+auto-accepting the pairing requests it is asked about. That is what lets
+`createBond` complete a pairing that *does* raise a prompt without this
+engine exposing a PIN/passkey callback surface.
 
 The default agent is the one BlueZ routes to whenever the pairing is not
 being driven by a client that registered its own agent. A client that
@@ -190,14 +191,14 @@ to the host default like any other caller.
 
 **Pairing requests initiated by a remote peer, and service-authorization
 requests, always go to the host default**, which is now ours. That is the
-case a desktop pairing prompt exists to serve. "Accepted silently" is if
-anything too gentle: with the IO capability clamped below, an incoming
-Secure Simple Pairing can complete without BlueZ raising *any* agent request
-at all.
+case a desktop pairing prompt exists to serve.
 
 Taking the role also sets **every adapter's IO capability on the host** to
 `NoInputNoOutput`, for all pairing on them and not just ours — including
-adapters other than the one `adapterName` selects.
+adapters other than the one `adapterName` selects, and including adapters
+plugged in afterwards while the role is held. Clamping the IO capability is
+what selects "Just Works" pairing, so it changes which pairing methods the
+host will negotiate, not merely who gets asked.
 
 `destroy()` hands the role back with `UnregisterAgent`. BlueZ keeps the
 default agents in a stack, so the previous holder — the desktop's agent, if
@@ -216,11 +217,17 @@ never called, so the host's existing agent keeps the role *and keeps
 receiving the requests* — a remote-initiated pairing is dispatched to it
 instead of to ours. The opt-out delegates rather than disabling.
 
-On a host with no other agent there is nothing to delegate to, so pairing
-that BlueZ needs an agent for — including `createBond` — then fails instead
-of being auto-accepted. On such a host `RegisterAgent` alone is enough to
-receive requests; the `RequestDefaultAgent` call matters when something else
-is already holding the role.
+On a host with no other agent there is nothing to delegate to. That does
+**not** mean `createBond` stops working: when no agent is available BlueZ
+substitutes `NoInputNoOutput` itself and proceeds (`device.c pair_device`),
+so a Just Works bond is still expected to succeed. What is lost is any
+pairing that needs a human answer — passkey entry, numeric comparison,
+authorization — which no longer has anywhere to go. *This paragraph is read
+from BlueZ 5.87 source; it has not been exercised against a peripheral.*
+
+On such a host `RegisterAgent` alone is enough to receive requests; the
+`RequestDefaultAgent` call matters when something else is already holding
+the role.
 
 ## Compatibility
 

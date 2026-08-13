@@ -58,22 +58,25 @@ class SdbusEngineConfig {
      * **Pairing requests initiated by a remote peer, and
      * service-authorization requests, always go to the host default**, which
      * is now ours. That is the case a desktop pairing prompt exists to
-     * serve. "Accepted silently" is if anything too gentle: with the IO
-     * capability clamped below, an incoming Secure Simple Pairing can
-     * complete without BlueZ raising *any* agent request at all.
+     * serve.
      *
      * Taking the role also sets **every adapter's IO capability on the
      * host** to `NoInputNoOutput`, for all pairing on them and not just
-     * ours — including adapters other than the one [adapterName] selects.
+     * ours — including adapters other than the one [adapterName] selects,
+     * and including adapters plugged in afterwards while the role is held.
+     * Clamping the IO capability is what selects "Just Works" pairing, so
+     * it changes which pairing methods the host will negotiate, not merely
+     * who gets asked.
      *
      * [SdbusEngine.destroy] hands the role back: BlueZ keeps the default
      * agents in a stack and restores the previous holder on
      * `UnregisterAgent`, which also restores the IO capability on every
      * adapter.
      *
-     * This is on by default because `createBond` needs an agent to answer
-     * BlueZ's pairing prompts, and because it is the behaviour every
-     * release so far has had.
+     * This is on by default because it is the behaviour every release so
+     * far has had, and because an always-answering agent is what lets
+     * `createBond` complete a pairing that *does* raise a prompt without
+     * this engine exposing a PIN/passkey callback surface.
      *
      * Set to false to skip registration entirely — no agent object is
      * published and `RequestDefaultAgent` is never called, so the host's
@@ -83,10 +86,16 @@ class SdbusEngineConfig {
      * disabling.
      *
      * On a host with **no** other agent registered there is nothing to
-     * delegate to, so pairing that BlueZ needs an agent for — including
-     * `createBond` — fails instead of being auto-accepted. Note that on such
-     * a host `RegisterAgent` alone is enough to receive requests; the
-     * `RequestDefaultAgent` call matters when something else is already
+     * delegate to. That does *not* mean `createBond` stops working: when no
+     * agent is available BlueZ substitutes `NoInputNoOutput` itself and
+     * proceeds (`device.c pair_device`), so a Just Works bond is still
+     * expected to succeed. What is lost is any pairing that needs a human
+     * answer — passkey entry, numeric comparison, authorization — which no
+     * longer has anywhere to go. This paragraph is read from BlueZ 5.87
+     * source; it has not been exercised against a peripheral.
+     *
+     * On such a host `RegisterAgent` alone is enough to receive requests;
+     * the `RequestDefaultAgent` call matters when something else is already
      * holding the role.
      */
     var registerDefaultPairingAgent: Boolean = true
