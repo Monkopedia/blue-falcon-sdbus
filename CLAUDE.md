@@ -13,7 +13,9 @@ BlueZ adapter over the system D-Bus so common BLE code can run on Linux
 alongside Android and iOS.
 
 - **Targets:** `linuxX64`, `linuxArm64` (Kotlin/Native), and `jvm`
-  (JVM-on-Linux — drives BlueZ through sdbus-kotlin's JNI backend).
+  (JVM-on-Linux — drives BlueZ through sdbus-kotlin's pure-Kotlin wire
+  backend, which speaks the D-Bus protocol over the socket directly; **no
+  JNI and no `libsystemd` on this target**, unlike the native ones).
 - **Published to:** Maven Central as `com.monkopedia:blue-falcon-sdbus`.
 - **Version scheme:** `<ours>-<blue-falcon-core>` — e.g. `1.0.0-3.0.3`
   means "our 1.0.0 built against `dev.bluefalcon:blue-falcon-core:3.0.3`".
