@@ -8,7 +8,8 @@ A Linux [BlueZ](https://www.bluez.org/) engine for the
 [Blue Falcon](https://github.com/Reedyuk/blue-falcon) BLE Kotlin
 Multiplatform library. Targets `linuxX64`, `linuxArm64`, and `jvm`
 (all Linux-hosted — the `jvm` target drives the same BlueZ stack through
-sdbus-kotlin's JNI backend), drives the BlueZ adapter over D-Bus via
+sdbus-kotlin's wire backend, which needs no `libsystemd` but does pull in
+junixsocket's native library), drives the BlueZ adapter over D-Bus via
 [sdbus-kotlin](https://github.com/Monkopedia/sdbus-kotlin), and plugs
 into Blue Falcon 3.0's `BlueFalconEngine` contract so your common code
 can stay the same across Android, iOS, and Linux.

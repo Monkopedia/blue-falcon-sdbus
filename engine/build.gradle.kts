@@ -8,8 +8,9 @@ plugins {
 kotlin {
     jvmToolchain(17)
 
-    // sdbus-kotlin backs every target this engine supports (linuxX64,
-    // linuxArm64, and jvm via its JNI Connection), and the engine is sdbus-only
+    // sdbus-kotlin backs every target this engine supports (linuxX64 and
+    // linuxArm64 via cinterop'd libsystemd, jvm via its wire Connection over
+    // junixsocket), and the engine is sdbus-only
     // by nature, so all of it — including the generated BlueZ proxies — lives in
     // commonMain.
     // libsystemd linker opts so the engine's own native test binaries link
