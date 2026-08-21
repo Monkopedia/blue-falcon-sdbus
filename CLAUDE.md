@@ -48,7 +48,9 @@ runbook; `CHANGELOG.md` follows Keep a Changelog.
 
 Use the Gradle wrapper from the repo root. **Requires JDK 17+** (CI uses
 JDK 21) and `libsystemd-dev` (Debian/Ubuntu) / `systemd` libs (Arch) on
-the build host — sdbus-kotlin links against `libsystemd`.
+the build host — the **native** targets cinterop `libsystemd`, and
+`:engine:build` always builds them. The `jvm` artifact itself does not
+need it (see Targets above).
 
 - `./gradlew :engine:build` — compiles and links both targets. This is
   the must-be-green gate; CI runs it on every push/PR to `main`.
