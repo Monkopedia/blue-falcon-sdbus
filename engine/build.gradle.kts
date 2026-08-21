@@ -10,9 +10,8 @@ kotlin {
 
     // sdbus-kotlin backs every target this engine supports (linuxX64 and
     // linuxArm64 via cinterop'd libsystemd, jvm via its wire Connection over
-    // junixsocket), and the engine is sdbus-only
-    // by nature, so all of it — including the generated BlueZ proxies — lives in
-    // commonMain.
+    // junixsocket), and the engine is sdbus-only by nature, so all of it —
+    // including the generated BlueZ proxies — lives in commonMain.
     // libsystemd linker opts so the engine's own native test binaries link
     // (consumers still supply their own — see README). Paths cover Arch
     // (/usr/lib) and Debian/Ubuntu multiarch; nonexistent -L paths are ignored.
