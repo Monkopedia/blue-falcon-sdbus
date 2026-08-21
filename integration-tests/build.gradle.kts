@@ -39,6 +39,16 @@ kotlin {
         val commonTest by getting {
             dependencies {
                 implementation(kotlin("test"))
+                // SPIKE (#22) only. The engine deliberately exposes no
+                // bond-state accessor, and the audit showed that asserting on
+                // the encrypted read is not an assertion about bonding — so
+                // this variant has to read org.bluez Device1.Paired directly.
+                // sdbus-kotlin is an `implementation` dependency of :engine and
+                // therefore not otherwise on this module's classpath; see the
+                // note in HarnessConnectRetry about deliberately NOT widening
+                // it. Widening it here is part of the cost this spike measures.
+                implementation(libs.sdbus.kotlin)
+                implementation(libs.kotlinx.serialization.core)
             }
         }
     }
