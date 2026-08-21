@@ -3,7 +3,7 @@ kotlin = "2.4.10"
 coroutines = "1.11.0"
 serialization = "1.11.0"
 sdbusKotlin = "1.0.1"
-blueFalconCore = "3.4.1"
+blueFalconCore = "3.7.0"
 vanniktechMavenPublish = "0.36.0"
 
 [libraries]
