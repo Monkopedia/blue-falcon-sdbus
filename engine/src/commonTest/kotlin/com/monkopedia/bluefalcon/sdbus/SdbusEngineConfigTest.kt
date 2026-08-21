@@ -5,13 +5,14 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Unit tests for [SdbusEngineConfig]'s default connect-retry policy, exercised
- * through the public [SdbusEngineConfig.onConnectDelay] default. Pure
- * `(attempt, error) -> Duration?` logic, no D-Bus, so these run on every target
- * without hardware.
+ * Unit tests for [SdbusEngineConfig]'s defaults — chiefly the connect-retry
+ * policy, exercised through the public [SdbusEngineConfig.onConnectDelay]
+ * default. Pure `(attempt, error) -> Duration?` logic, no D-Bus, so these run
+ * on every target without hardware.
  *
  * The default deliberately retries only the transient BlueZ
  * `org.bluez.Error.Failed: le-connection-abort-by-local` race — up to 3
@@ -57,5 +58,28 @@ class SdbusEngineConfigTest {
     @Test
     fun doesNotRetryErrorWithNoMessage() = runTest {
         assertNull(retry(1, Throwable()), "a message-less error is not retried")
+    }
+
+    /**
+     * The pairing-agent opt-out is deliberately default-on: flipping this
+     * default to `false` would silently take the auto-accepting agent away
+     * from every existing caller of `createBond`. That compatibility
+     * guarantee is the one thing about this feature a hardware-free test can
+     * actually hold, so it is the only one asserted here.
+     *
+     * Whether the engine then talks to `org.bluez.AgentManager1` at all —
+     * that `false` publishes no agent object and never calls
+     * `RequestDefaultAgent`, and that `destroy()` unregisters whenever
+     * `RegisterAgent` succeeded even if `RequestDefaultAgent` then failed —
+     * needs a bus. It is deliberately NOT faked here. See #50: an engine
+     * that ignored this flag entirely would still pass everything in this
+     * file, so do not read a green build as coverage of the behaviour.
+     */
+    @Test
+    fun registersDefaultPairingAgentByDefault() {
+        assertTrue(
+            SdbusEngineConfig().registerDefaultPairingAgent,
+            "a bare SdbusEngine {} must keep the pre-existing agent behaviour",
+        )
     }
 }
