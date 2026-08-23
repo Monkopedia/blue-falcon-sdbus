@@ -14,7 +14,7 @@ to tag:
 - [ ] `:engine:build` green on GitHub Actions on that commit.
 - [ ] `./gradlew :integration-tests:linuxX64Test -PrunIntegrationTests=true`
       run against a live [BF-Test](https://github.com/Monkopedia/bf-test-peripheral)
-      peripheral; **all 15 tests pass**. Integration tests cannot run in
+      peripheral; **all 16 tests pass**. Integration tests cannot run in
       CI — they need real hardware. Record the host you ran on in the
       changelog entry (e.g. "verified on adolin / Arch Linux /
       BlueZ 5.86").
@@ -42,9 +42,18 @@ The `release.yml` workflow will:
 
 1. Verify the tag matches `gradle.properties` `version=`.
 2. Verify `CHANGELOG.md` has a dated entry for the version.
-3. Publish the engine artifact to Maven Central via
+3. Generate the POM this release is about to publish and run
+   `.github/scripts/check-release-docs.sh` against it. That gate fails the
+   release — before anything is uploaded — if README's Install coordinate,
+   its "This table describes **x.y.z**" sentence, or any row of its
+   compatibility table disagrees with the release being cut, or if the
+   integration-test count quoted in this file disagrees with the number of
+   `@Test` functions in `:integration-tests`. So the README's release-scoped
+   claims have to be updated to name the version you are tagging, in the
+   commit you tag.
+4. Publish the engine artifact to Maven Central via
    `com.vanniktech.maven.publish`.
-4. Create a GitHub Release for the tag whose body is the CHANGELOG
+5. Create a GitHub Release for the tag whose body is the CHANGELOG
    section for this version, with the Maven coordinates prepended.
 
 If any gate fails, the tag remains but nothing publishes. Fix the issue
