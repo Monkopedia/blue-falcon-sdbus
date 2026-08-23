@@ -425,7 +425,12 @@ if [ "${#MISSING_ROWS[@]}" -gt 0 ]; then
     fail 3 "the compatibility table is missing ${#MISSING_ROWS[@]} row(s) this check knows how to verify (${MISSING_SORTED[*]}) — a deleted row lowers the denominator with it, so the count alone cannot notice the coverage it lost; restore the row, or remove it from ROW_DEP to say deliberately that it is no longer claimed"
 fi
 
-[ "$VERIFIED" -eq "$TABLE_ROWS" ] || fail 3 "verified $VERIFIED of $TABLE_ROWS table rows — every row must be accounted for, and this gap means rows were lost before comparison (most likely a duplicated row label collapsing onto one entry), so 'mismatches: $MISMATCHES' describes only the rows that survived"
+# The invariant is ACCOUNTED FOR, not verified: a mismatching row was still
+# compared, it just disagreed, and it is reported by the MISMATCHES check below
+# with its own exit code. Asserting VERIFIED alone here would swallow every
+# ordinary mismatch into this branch — the defect this whole script exists to
+# catch, reported as "nothing was compared" and exiting before section 6 runs.
+[ "$((VERIFIED + MISMATCHES))" -eq "$TABLE_ROWS" ] || fail 3 "accounted for $((VERIFIED + MISMATCHES)) of $TABLE_ROWS table rows ($VERIFIED verified, $MISMATCHES mismatched) — every row must be reached, and this gap means rows were lost before comparison (most likely a duplicated row label collapsing onto one entry), so the counts above describe only the rows that survived"
 
 # ---------------------------------------------------------------------------
 # 6. The integration-test count quoted in the docs. Not a POM claim, but the
