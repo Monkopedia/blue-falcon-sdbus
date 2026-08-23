@@ -8,6 +8,26 @@ means "our 1.0.0 built against `dev.bluefalcon:blue-falcon-core:3.0.3`".
 
 ## [Unreleased]
 
+### Added
+
+- `release.yml` now verifies README's release-scoped version claims against the
+  POM the release is about to publish, before publishing. The Install
+  coordinate, the "This table describes **x.y.z**" sentence and every row of
+  the compatibility table must agree with that POM (Gradle's row is checked
+  against `gradle-wrapper.properties`, since a build-time tool is correctly
+  absent from the POM), and the integration-test count quoted in
+  `RELEASING.md` must agree with the number of `@Test` functions in
+  `:integration-tests`. A mismatch fails the release; so does a POM that
+  cannot be retrieved or parsed, which is reported as a distinct failure so it
+  can never be mistaken for agreement. The check lives in
+  `.github/scripts/check-release-docs.sh` and can be run by hand against an
+  already-published release.
+
+### Fixed
+
+- `RELEASING.md` said the integration suite has 15 tests; it has 16 since the
+  failed-`StartNotify` regression test landed.
+
 ## [1.2.3-3.4.1] - 2026-07-15
 
 ### Changed
