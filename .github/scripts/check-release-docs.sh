@@ -16,6 +16,22 @@
 # which records *declared* versions rather than the versions that were actually
 # resolved and published.
 #
+# ⚠️ SUBSTITUTION, AND ITS EVIDENCE IS A SAMPLE OF ONE.
+# At tag time the release being cut is NOT published yet, so fetching the POM
+# for the version the README names would 404 on every release. release.yml
+# therefore passes --pom-file pointing at the POM Gradle is about to UPLOAD
+# (generatePomFileForJvmPublication), not one fetched from Central. Fetching the
+# published POM remains this script's default when --pom-file is omitted.
+#
+# That substitution was verified ONCE: for 1.2.3-3.4.1 the generated and
+# published POMs are byte-identical (sha256 2609e372…, 2594 B each), measured
+# 2026-08-23. n=1. If POM generation ever diverges — a Gradle or plugin bump,
+# added metadata, a renamed publication — this check starts validating a
+# document that is not what ships, AND IT WILL STILL PASS. Nothing here detects
+# that. The cheapest way to convert n=1 into a per-release measurement is a
+# post-publish curl+diff of the POM that was just uploaded; it cannot gate the
+# release it measures, but it would catch divergence before the next one.
+#
 # This script is invoked by .github/workflows/release.yml, before anything is
 # published, so a wrong README fails the release instead of shipping with it.
 # It is also runnable by hand against an already-published release:
@@ -388,6 +404,28 @@ fi
 VERIFIED=$((VERIFIED_POM + VERIFIED_LOCAL))
 say ""
 say "Rows verified: $VERIFIED/$TABLE_ROWS ($VERIFIED_POM against the POM, $VERIFIED_LOCAL against gradle-wrapper.properties), mismatches: $MISMATCHES"
+
+# A denominator that is printed but never asserted is decoration. TABLE is keyed
+# on row label while TABLE_ROWS counts lines, so a duplicated label collapses
+# last-write-wins and the count silently drops below the number of rows a reader
+# can see in the table. Without this, a README with a wrong row ABOVE the correct
+# one prints "6/7 ... mismatches: 0" and exits 0 — the exact failure this script
+# exists to prevent, committed by the script itself.
+# The check above catches rows LOST between the table and the comparison. It
+# cannot catch a row deleted from the table itself: remove one and TABLE_ROWS
+# falls with VERIFIED, so 5/5 passes and the >=5 floor never notices the lost
+# coverage. The script already refuses a row it does not know (UNKNOWN_ROWS
+# above); this is the symmetric half — every row it DOES know must be present.
+MISSING_ROWS=()
+for label in "${!ROW_DEP[@]}"; do
+    [ -n "${TABLE[$label]+x}" ] || MISSING_ROWS+=("$label")
+done
+if [ "${#MISSING_ROWS[@]}" -gt 0 ]; then
+    IFS=$'\n' MISSING_SORTED=($(printf '%s\n' "${MISSING_ROWS[@]}" | sort)); unset IFS
+    fail 3 "the compatibility table is missing ${#MISSING_ROWS[@]} row(s) this check knows how to verify (${MISSING_SORTED[*]}) — a deleted row lowers the denominator with it, so the count alone cannot notice the coverage it lost; restore the row, or remove it from ROW_DEP to say deliberately that it is no longer claimed"
+fi
+
+[ "$VERIFIED" -eq "$TABLE_ROWS" ] || fail 3 "verified $VERIFIED of $TABLE_ROWS table rows — every row must be accounted for, and this gap means rows were lost before comparison (most likely a duplicated row label collapsing onto one entry), so 'mismatches: $MISMATCHES' describes only the rows that survived"
 
 # ---------------------------------------------------------------------------
 # 6. The integration-test count quoted in the docs. Not a POM claim, but the
