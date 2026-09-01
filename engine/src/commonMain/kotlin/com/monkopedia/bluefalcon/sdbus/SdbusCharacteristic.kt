@@ -73,6 +73,11 @@ class SdbusCharacteristic internal constructor(
      * Adds [descriptor], ignoring a repeat of one already held. As with
      * characteristics, identity is the D-Bus object path — a characteristic may
      * legally carry several descriptors with the same UUID.
+     *
+     * Path-wins has the same consequence here: a repeat at a held path is
+     * dropped whatever its UUID, so a re-enumerated path keeps the first UUID
+     * seen. BlueZ gives one UUID per path, so that input does not arise; it is
+     * stated because the choice is otherwise invisible.
      */
     internal fun addDescriptor(descriptor: SdbusDescriptor) {
         if (_descriptors.none { it.objectPath == descriptor.objectPath }) {

@@ -20,6 +20,13 @@ class SdbusService internal constructor(
      * Adds [characteristic], ignoring a repeat of one already held. Identity is
      * the D-Bus object path, not the UUID: GATT permits sibling characteristics
      * that share a UUID, and BlueZ exposes each at its own path.
+     *
+     * Because the path is authoritative, a repeat at a path already held is
+     * dropped **whatever its UUID** — so if a path were ever re-enumerated with
+     * a different UUID, the first one seen wins and the later value is
+     * discarded. BlueZ gives one UUID per path, so that input does not arise
+     * in practice; it is stated because the choice is made here silently and
+     * a reader keying on UUID would expect the opposite.
      */
     internal fun addCharacteristic(characteristic: SdbusCharacteristic) {
         if (_characteristics.none { it.objectPath == characteristic.objectPath }) {
