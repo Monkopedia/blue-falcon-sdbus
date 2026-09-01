@@ -25,6 +25,15 @@ means "our 1.0.0 built against `dev.bluefalcon:blue-falcon-core:3.0.3`".
 
 ### Fixed
 
+- GATT objects that share a UUID with a sibling are no longer discarded.
+  `SdbusService.addCharacteristic` and `SdbusCharacteristic.addDescriptor`
+  de-duplicated by UUID, but GATT permits several characteristics with the same
+  UUID in one service (and several descriptors with the same UUID on one
+  characteristic); BlueZ exposes each at its own object path. Every extra
+  instance was dropped, and because it was never added to a service it was
+  unreachable from the public API. Both guards now key on the D-Bus object
+  path, the identity `SdbusCharacteristic.equals` / `SdbusDescriptor.equals`
+  already use.
 - `RELEASING.md` said the integration suite has 15 tests; it has 16 since the
   failed-`StartNotify` regression test landed.
 
