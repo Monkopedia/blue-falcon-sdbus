@@ -75,9 +75,11 @@ class SdbusCharacteristic internal constructor(
      * legally carry several descriptors with the same UUID.
      *
      * Path-wins has the same consequence here: a repeat at a held path is
-     * dropped whatever its UUID, so a re-enumerated path keeps the first UUID
-     * seen. BlueZ gives one UUID per path, so that input does not arise; it is
-     * stated because the choice is otherwise invisible.
+     * dropped whatever its UUID, so a second object at a held path would keep
+     * the first UUID seen. As with characteristics that input cannot reach the
+     * guard — `resolveGattObjects` iterates a `Map` keyed by path and rebuilds
+     * its accumulator each pass — and it stops being unreachable if that state
+     * is ever made to persist.
      */
     internal fun addDescriptor(descriptor: SdbusDescriptor) {
         if (_descriptors.none { it.objectPath == descriptor.objectPath }) {
