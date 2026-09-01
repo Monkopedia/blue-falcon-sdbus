@@ -69,8 +69,13 @@ class SdbusCharacteristic internal constructor(
 
     internal fun setService(service: SdbusService) { _service = service }
 
+    /**
+     * Adds [descriptor], ignoring a repeat of one already held. As with
+     * characteristics, identity is the D-Bus object path — a characteristic may
+     * legally carry several descriptors with the same UUID.
+     */
     internal fun addDescriptor(descriptor: SdbusDescriptor) {
-        if (_descriptors.none { it.uuid == descriptor.uuid }) {
+        if (_descriptors.none { it.objectPath == descriptor.objectPath }) {
             _descriptors.add(descriptor)
         }
     }

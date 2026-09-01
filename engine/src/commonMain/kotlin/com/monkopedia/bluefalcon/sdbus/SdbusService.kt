@@ -16,8 +16,13 @@ class SdbusService internal constructor(
 
     override val characteristics: List<BluetoothCharacteristic> get() = _characteristics.toList()
 
+    /**
+     * Adds [characteristic], ignoring a repeat of one already held. Identity is
+     * the D-Bus object path, not the UUID: GATT permits sibling characteristics
+     * that share a UUID, and BlueZ exposes each at its own path.
+     */
     internal fun addCharacteristic(characteristic: SdbusCharacteristic) {
-        if (_characteristics.none { it.uuid == characteristic.uuid }) {
+        if (_characteristics.none { it.objectPath == characteristic.objectPath }) {
             _characteristics.add(characteristic)
         }
     }
