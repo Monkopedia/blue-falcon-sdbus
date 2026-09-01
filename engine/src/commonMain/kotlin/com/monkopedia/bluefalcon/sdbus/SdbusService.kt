@@ -36,8 +36,9 @@ class SdbusService internal constructor(
      *
      * Stated because the choice is invisible at the call site and points the
      * opposite way from what a reader keying on UUID would assume — and
-     * because it stops being unreachable the moment that accumulator is made
-     * to persist across passes.
+     * because it stops being unreachable the moment any of that per-pass state
+     * is made to persist — the accumulator, or the [SdbusService] instances
+     * themselves being reused across passes rather than rebuilt.
      */
     internal fun addCharacteristic(characteristic: SdbusCharacteristic) {
         if (_characteristics.none { it.objectPath == characteristic.objectPath }) {
