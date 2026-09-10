@@ -181,6 +181,10 @@ class SdbusEngine internal constructor(
     }
 
     override suspend fun stopScanning() {
+        // Every method that touches adapterProxy / objectManagerProxy must
+        // await init first: they are `lateinit`, populated by initJob, and the
+        // constructor returns before initJob runs.
+        initJob.join()
         logger?.info("Scan stopped")
         isScanning = false
         try {
@@ -272,6 +276,10 @@ class SdbusEngine internal constructor(
         peripheral: BluetoothPeripheral,
         serviceUUIDs: List<Uuid>,
     ) {
+        // See stopScanning(): objectManagerProxy is only valid after init.
+        // Without this join a pre-init call is swallowed by resolveGattObjects'
+        // catch and leaves the peripheral with zero services.
+        initJob.join()
         resolveGattObjects(peripheral.asSdbus())
     }
 
@@ -447,6 +455,8 @@ class SdbusEngine internal constructor(
     }
 
     override suspend fun removeBond(peripheral: BluetoothPeripheral) {
+        // See stopScanning(): adapterProxy is only valid after init.
+        initJob.join()
         val impl = peripheral.asSdbus()
         adapterProxy.removeDevice(impl.objectPath)
     }
