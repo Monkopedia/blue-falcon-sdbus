@@ -8,6 +8,19 @@ means "our 1.0.0 built against `dev.bluefalcon:blue-falcon-core:3.0.3`".
 
 ## [Unreleased]
 
+### Fixed
+
+- `stopScanning()`, `removeBond()` and `discoverServices()` now `join()` the
+  engine's init job before touching the BlueZ proxies, matching `scan()` and
+  `connect()`. `adapterProxy` / `objectManagerProxy` are `lateinit` and are
+  populated by a coroutine the constructor does not wait for, so a call made in
+  that window used to fail: `removeBond()` threw
+  `UninitializedPropertyAccessException` to the caller, and `discoverServices()`
+  was swallowed by `resolveGattObjects`' catch and silently left the peripheral
+  with zero services. Reachable from the idempotent-teardown / adapter-restart
+  shape, where a second engine is constructed while a previous `destroy()` is
+  still pending.
+
 ### Added
 
 - `release.yml` now verifies README's release-scoped version claims against the
