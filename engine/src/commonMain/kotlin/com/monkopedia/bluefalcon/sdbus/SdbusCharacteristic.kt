@@ -64,6 +64,22 @@ class SdbusCharacteristic internal constructor(
     internal var _notifyJob: Job? = null
     override val isNotifying: Boolean get() = _isNotifying
 
+    /**
+     * BlueZ's `org.bluez.GattCharacteristic1.Flags`, cached from the same
+     * ObjectManager snapshot that discovers this characteristic so callers can
+     * inspect write/notify support without a synchronous D-Bus round trip.
+     */
+    internal var _flags: List<String> = emptyList()
+    val flags: List<String> get() = _flags
+
+    /**
+     * BlueZ's `org.bluez.GattCharacteristic1.MTU` — the negotiated ATT MTU for
+     * the connection this characteristic belongs to — cached at discovery time.
+     * Null until BlueZ has published it (it appears only after MTU exchange).
+     */
+    internal var _mtu: Int? = null
+    val mtu: Int? get() = _mtu
+
     private var _service: SdbusService? = null
     override val service: BluetoothService? get() = _service
 
