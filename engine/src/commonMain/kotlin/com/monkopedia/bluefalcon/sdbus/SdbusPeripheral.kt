@@ -23,6 +23,18 @@ class SdbusPeripheral internal constructor(
     override var rssi: Float? = null
     override var mtuSize: Int? = null
 
+    internal var _manufacturerData: Map<Int, ByteArray> = emptyMap()
+
+    /**
+     * Manufacturer-specific advertisement data, keyed by company ID.
+     *
+     * Sourced from BlueZ's `org.bluez.Device1.ManufacturerData` (`a{qv}`), which
+     * BlueZ populates from the advertisement and then *retains* on the cached
+     * device object. Unlike Android/iOS — where this is a per-scan-result value —
+     * a value here may therefore be left over from an earlier advertisement.
+     */
+    override val manufacturerData: Map<Int, ByteArray> get() = _manufacturerData
+
     private val _services = mutableListOf<SdbusService>()
     override val services: List<BluetoothService> get() = _services.toList()
 
