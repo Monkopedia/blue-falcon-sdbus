@@ -64,6 +64,13 @@ class SdbusCharacteristic internal constructor(
     internal var _notifyJob: Job? = null
     override val isNotifying: Boolean get() = _isNotifying
 
+    /** Stops the notify collector and clears [isNotifying]; no D-Bus call. */
+    internal fun endNotifySession() {
+        _notifyJob?.cancel()
+        _notifyJob = null
+        _isNotifying = false
+    }
+
     private var _service: SdbusService? = null
     override val service: BluetoothService? get() = _service
 
