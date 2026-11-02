@@ -19,6 +19,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
+import kotlin.time.TimeSource
 
 /**
  * Integration tests against the BF-Test ESP32-C6 peripheral.
@@ -294,19 +295,77 @@ class BleIntegrationTests {
 
     // ---- Bonding ----
 
+    /**
+     * SPIKE (#22) — unpair-then-bond variant. **Not a merge candidate**; this
+     * exists to produce a failure-rate and runtime number for the trade the
+     * issue poses.
+     *
+     * The shipped version of this test cannot fail. The hardware audit on #22
+     * proved it over five runs: with `createBond` replaced by a bare `throw`
+     * *and* the device unpaired, it still passed and still came back
+     * `Paired: yes` — because BlueZ elevates security on the Char G read and
+     * the engine's `NoInputNoOutputAgent` approves it silently. So
+     * `readCharacteristic` on an encrypted characteristic is a complete
+     * substitute for `createBond`, and asserting on the read asserts nothing
+     * about bonding.
+     *
+     * Three changes, all of which are load-bearing:
+     *  1. **unpair first** (`removeBond`), so the run actually has a bond to
+     *     make rather than inheriting one from `/var/lib/bluetooth`;
+     *  2. **no swallowing catch** around `createBond`;
+     *  3. **assert `Device1.Paired` before the encrypted read.** This is the
+     *     one that does the work. Without it, (1) and (2) together still pass
+     *     against a `createBond` that silently no-ops, because the read bonds
+     *     on its own.
+     */
     @Test
     fun bondAndReadEncrypted(): Unit = runBlocking {
-        try {
-            engine().createBond(peripheral())
-        } catch (_: Exception) {
-            // May already be bonded from a previous run
+        val mark = TimeSource.Monotonic.markNow()
+
+        // Adapter1.RemoveDevice destroys the device object and drops the LTK.
+        // It does not evict the engine's knownPeripherals/connectedDevices
+        // (SdbusEngine.kt:99-100), so everything below re-scans rather than
+        // reusing the peripheral setUp handed us.
+        engine().removeBond(peripheral())
+        delay(2000)
+        println("[spike] unpaired after ${mark.elapsedNow()}")
+
+        val found = harness().scanForDevice(timeoutMs = 120_000L) { device ->
+            device.name == BfTestConstants.DEVICE_NAME
         }
+        peripheral = found
+        HarnessConnectRetry.connect(engine(), found)
+        waitForServices(found, timeoutMs = 15_000L)
+        println("[spike] re-connected after ${mark.elapsedNow()}")
+
+        // Positive control on step 1: if this is already true, the rest of the
+        // test is measuring a bond that was never removed, and a green result
+        // would mean nothing.
+        assertEquals(
+            false, BondState.pairedOrNull(found),
+            "removeBond should have left the device unpaired before createBond; " +
+                "Device1.Paired was ${BondState.pairedOrNull(found)}",
+        )
+
+        engine().createBond(found)
+
+        // THE assertion. Observed before any encrypted traffic, so nothing but
+        // createBond can have caused it.
+        assertTrue(
+            BondState.awaitPaired(found, timeoutMs = 10_000L),
+            "Device1.Paired must be true after createBond and before any " +
+                "encrypted read — a bond the read could have made on its own is " +
+                "not evidence that createBond works",
+        )
+        println("[spike] bonded after ${mark.elapsedNow()}")
+
         val charG = findChar(BfTestConstants.CHAR_G_ENCRYPTED)
-        engine().readCharacteristic(peripheral(), charG)
+        engine().readCharacteristic(found, charG)
         assertContentEquals(
             BfTestConstants.CHAR_G_EXPECTED, charG.value,
             "Char G should return SECURE after bonding",
         )
+        println("[spike] read complete after ${mark.elapsedNow()}")
     }
 
     // L2CAP CoC is not supported on BlueZ via D-Bus; SdbusEngine throws
