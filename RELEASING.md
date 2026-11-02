@@ -24,6 +24,10 @@ to tag:
       re-drive the radio. Sanity-check the wall clock anyway: the live
       suite takes minutes, so a green that comes back in seconds is not a
       hardware run.
+- [ ] `./gradlew :integration-tests:jvmTest -PrunIntegrationTests=true`
+      against the same peripheral; **all 16 tests pass**. The JVM target
+      drives BlueZ through sdbus-kotlin's JNI backend, so a green
+      `linuxX64Test` says nothing about the published `-jvm` artifact.
 - [ ] `gradle.properties` `version=` matches the tag you're about to
       push (without the `v` prefix).
 - [ ] `CHANGELOG.md` has a dated `## [x.y.z-core] - YYYY-MM-DD` heading
