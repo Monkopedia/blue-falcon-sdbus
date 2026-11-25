@@ -48,6 +48,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.concurrent.Volatile
+import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicReference
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 
@@ -97,6 +98,9 @@ class SdbusEngine internal constructor(
         private set
 
     private val connection = createSystemBusConnection()
+
+    @OptIn(ExperimentalAtomicApi::class)
+    private val destroyed = AtomicBoolean(false)
     private val bluezService = ServiceName("org.bluez")
     private val adapterPath = ObjectPath("/org/bluez/$adapterName")
     private lateinit var adapterProxy: Adapter1Proxy
@@ -569,16 +573,22 @@ class SdbusEngine internal constructor(
 
     /**
      * Stops scanning, cancels all connections, hands the pairing agent back
-     * to BlueZ if one was registered, and shuts down the D-Bus event loop.
+     * to BlueZ if one was registered, shuts down the D-Bus event loop and
+     * releases the system bus connection. Only the first call does anything.
      *
      * Not part of [BlueFalconEngine], but exposed so tests and long-running
-     * applications can cleanly release the system bus connection. A new
-     * [SdbusEngine] constructed after destroy() will wait for the previous
-     * event loop to stop before starting its own. Its D-Bus connection is
-     * opened eagerly in the constructor, so the two connections can briefly
-     * overlap; only the event loops are serialised.
+     * applications can cleanly release the system bus connection. The
+     * shutdown finishes in the background after destroy() returns; a new
+     * [SdbusEngine] constructed afterwards waits for it before starting its
+     * own event loop. Its D-Bus connection is opened eagerly in the
+     * constructor, so the two connections can briefly overlap; only the
+     * event loops are serialised.
      */
+    @OptIn(ExperimentalAtomicApi::class)
     fun destroy() {
+        // A second destroy() would re-run the shutdown job, and
+        // stopEventLoop()/release() throw on a released connection.
+        if (!destroyed.compareAndSet(false, true)) return
         isScanning = false
         scanJob?.cancel()
         scanJob = null
@@ -588,10 +598,12 @@ class SdbusEngine internal constructor(
         // destroy() can return. The next engine instance awaits this.
         // The agent is handed back first, while the event loop that
         // carries the reply is still running, and on this scope rather
-        // than `scope` so the cancel() below doesn't kill it.
+        // than `scope` so the cancel() below doesn't kill it. The
+        // connection is released last, once its event loop has stopped.
         pendingShutdown = CoroutineScope(Dispatchers.Default).launch {
             unregisterAgent()
             connection.stopEventLoop()
+            connection.release()
         }
         scope.cancel()
     }
