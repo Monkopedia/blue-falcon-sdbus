@@ -25,7 +25,7 @@ class SdbusCharacteristic internal constructor(
 
     /**
      * Observes the characteristic value as a [StateFlow]. Updated by reads
-     * and, while [isNotifying] is true, by notifications/indications.
+     * and, while [isNotifying] is true, by everything [notifications] emits.
      *
      * Exposed on the concrete [SdbusCharacteristic] because the core
      * [BluetoothCharacteristic] interface has no reactive surface;
@@ -46,8 +46,13 @@ class SdbusCharacteristic internal constructor(
 
     /**
      * The core [BluetoothCharacteristic] notification stream. Emits each
-     * notification/indication value while [isNotifying]; unlike [valueFlow] it
-     * carries only push updates, not values fetched by explicit reads.
+     * notification/indication value while [isNotifying].
+     *
+     * On BlueZ it is not push-only: while [isNotifying], it also emits the
+     * value of every explicit read of this characteristic, whether made by
+     * this client or by any other process on the host. BlueZ exposes a read
+     * result and a notification as the same `Value` `PropertiesChanged`, so
+     * the engine cannot tell them apart.
      */
     override val notifications: SharedFlow<ByteArray> = _notifications.asSharedFlow()
 
