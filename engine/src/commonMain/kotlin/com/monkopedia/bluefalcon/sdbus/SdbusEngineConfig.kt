@@ -86,13 +86,14 @@ class SdbusEngineConfig {
      * disabling.
      *
      * On a host with **no** other agent registered there is nothing to
-     * delegate to. That does *not* mean `createBond` stops working: when no
-     * agent is available BlueZ substitutes `NoInputNoOutput` itself and
-     * proceeds (`device.c pair_device`), so a Just Works bond is still
-     * expected to succeed. What is lost is any pairing that needs a human
-     * answer — passkey entry, numeric comparison, authorization — which no
-     * longer has anywhere to go. This paragraph is read from BlueZ 5.87
-     * source; it has not been exercised against a peripheral.
+     * delegate to, and pairing that requires an agent fails. BlueZ still
+     * asks an agent to confirm the pairing, finds none, and rejects it, so
+     * `createBond` fails with `org.bluez.Error.AuthenticationFailed`.
+     * Measured on BlueZ 5.88 bonding to a Just Works peripheral, with
+     * `bluetoothd` logging `No agent available for request type 2`. If you
+     * opt out and need to bond, make sure some other agent is registered on
+     * the host, such as a desktop pairing agent or `bluetoothctl` with its
+     * agent on.
      *
      * On such a host `RegisterAgent` alone is enough to receive requests;
      * the `RequestDefaultAgent` call matters when something else is already
