@@ -8,6 +8,61 @@ means "our 1.0.0 built against `dev.bluefalcon:blue-falcon-core:3.0.3`".
 
 ## [Unreleased]
 
+### Fixed
+
+- Notify sessions now end with their connection. The notify collector ran on
+  the engine scope and `isNotifying` lived on the `SdbusCharacteristic`
+  instance, and `disconnect()` reset neither. After a reconnect, re-enabling
+  notify on the freshly discovered characteristic emitted every notification
+  twice. Re-enabling the instance held from before the disconnect was a silent
+  no-op, because it still read `isNotifying == true`. Now `disconnect()`, a
+  superseding `connect()` and a remote `Connected=false` cancel each collector
+  and clear `isNotifying` without sending `StopNotify`. An enable whose
+  `StartNotify` is still in flight when the connection closes is ended the same
+  way. **Behaviour change:** `isNotifying` reads `false` after a disconnect, and
+  the app must re-enable notifications after reconnecting. Previously a bonded
+  device's notifications kept arriving on the stale collector after a
+  reconnect, because BlueZ keeps the session and re-arms it.
+- `stopScanning()`, `removeBond()` and `discoverServices()` now `join()` the
+  engine's init job before touching the BlueZ proxies, matching `scan()` and
+  `connect()`. `adapterProxy` / `objectManagerProxy` are `lateinit` and are
+  populated by a coroutine the constructor does not wait for, so a call made in
+  that window used to fail: `removeBond()` threw
+  `UninitializedPropertyAccessException` to the caller, and `discoverServices()`
+  was swallowed by `resolveGattObjects`' catch and silently left the peripheral
+  with zero services. Reachable from the idempotent-teardown / adapter-restart
+  shape, where a second engine is constructed while a previous `destroy()` is
+  still pending.
+
+### Added
+
+- `release.yml` now verifies README's release-scoped version claims against the
+  POM the release is about to publish, before publishing. The Install
+  coordinate, the "This table describes **x.y.z**" sentence and every row of
+  the compatibility table must agree with that POM (Gradle's row is checked
+  against `gradle-wrapper.properties`, since a build-time tool is correctly
+  absent from the POM), and the integration-test count quoted in
+  `RELEASING.md` must agree with the number of `@Test` functions in
+  `:integration-tests`. A mismatch fails the release; so does a POM that
+  cannot be retrieved or parsed, which is reported as a distinct failure so it
+  can never be mistaken for agreement. The check lives in
+  `.github/scripts/check-release-docs.sh` and can be run by hand against an
+  already-published release.
+
+### Fixed
+
+- GATT objects that share a UUID with a sibling are no longer discarded.
+  `SdbusService.addCharacteristic` and `SdbusCharacteristic.addDescriptor`
+  de-duplicated by UUID, but GATT permits several characteristics with the same
+  UUID in one service (and several descriptors with the same UUID on one
+  characteristic); BlueZ exposes each at its own object path. Every extra
+  instance was dropped, and because it was never added to a service it was
+  unreachable from the public API. Both guards now key on the D-Bus object
+  path, the identity `SdbusCharacteristic.equals` / `SdbusDescriptor.equals`
+  already use.
+- `RELEASING.md` said the integration suite has 15 tests; it has 16 since the
+  failed-`StartNotify` regression test landed.
+
 ## [1.2.3-3.4.1] - 2026-07-15
 
 ### Changed

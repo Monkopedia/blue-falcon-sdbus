@@ -3,12 +3,15 @@ package com.monkopedia.bluefalcon.sdbus
 import com.monkopedia.sdbus.ObjectPath
 import dev.bluefalcon.core.Uuid
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -67,5 +70,21 @@ class SdbusCharacteristicTest {
         val char = newCharacteristic()
         assertEquals(null, char.value)
         assertEquals(null, char.valueFlow.value)
+    }
+
+    @Test
+    fun endNotifySessionCancelsCollectorAndClearsIsNotifying() = runTest {
+        val char = newCharacteristic()
+        // Stand-in for the engine's notify collector, as toggleNotifications
+        // leaves it once StartNotify has succeeded.
+        val collector = backgroundScope.launch { awaitCancellation() }
+        char._notifyJob = collector
+        char._isNotifying = true
+
+        char.endNotifySession()
+
+        assertTrue(collector.isCancelled, "the collector must not outlive its session")
+        assertFalse(char.isNotifying, "a re-enable must not be skipped as already notifying")
+        assertNull(char._notifyJob)
     }
 }

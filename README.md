@@ -8,7 +8,8 @@ A Linux [BlueZ](https://www.bluez.org/) engine for the
 [Blue Falcon](https://github.com/Reedyuk/blue-falcon) BLE Kotlin
 Multiplatform library. Targets `linuxX64`, `linuxArm64`, and `jvm`
 (all Linux-hosted — the `jvm` target drives the same BlueZ stack through
-sdbus-kotlin's JNI backend), drives the BlueZ adapter over D-Bus via
+sdbus-kotlin's wire backend, which needs no `libsystemd` but does pull in
+junixsocket's native library), drives the BlueZ adapter over D-Bus via
 [sdbus-kotlin](https://github.com/Monkopedia/sdbus-kotlin), and plugs
 into Blue Falcon 3.0's `BlueFalconEngine` contract so your common code
 can stay the same across Android, iOS, and Linux.
@@ -46,7 +47,10 @@ Versions are `<ours>-<blue-falcon-core>` — `1.0.0-3.0.3` means "our
 ### System requirements
 
 - BlueZ ≥ 5.50 running on the target system.
-- `libsystemd` at link and runtime (sdbus-kotlin links against it).
+- `libsystemd` at link and runtime **if you consume a native target**
+  (`linuxX64`/`linuxArm64`) — sdbus-kotlin cinterops it there. The `jvm`
+  artifact does **not** need it; its transport is junixsocket, which ships
+  and loads its own `.so` instead.
 - Access to the system D-Bus (`bluetooth` group membership or an
   equivalent policy that grants access to `org.bluez`).
 - **JDK 17 or newer** if you consume the `jvm` artifact — it is compiled
@@ -109,8 +113,8 @@ bus connection. Not calling it on exit leaks a background thread.
 ### Observing notifications and indications
 
 Blue Falcon 3.4's `BluetoothCharacteristic` exposes a
-`notifications: SharedFlow<ByteArray>` of push updates, which the engine
-drives while the characteristic is notifying:
+`notifications: SharedFlow<ByteArray>`, which the engine drives while the
+characteristic is notifying:
 
 ```kotlin
 engine.notifyCharacteristic(device, characteristic, notify = true)
@@ -122,9 +126,14 @@ The engine-wide stream is also available as
 `engine.characteristicNotifications: SharedFlow<CharacteristicNotification>`,
 which tags each value with its peripheral and characteristic.
 
+Neither stream is push-only. While a characteristic is notifying, both also
+carry the value of every explicit read of it, whether made by this client or
+by any other process on the host, because BlueZ exposes a read result and a
+notification as the same `Value` `PropertiesChanged`.
+
 For a snapshot-style surface that also reflects explicit reads, cast to
 `SdbusCharacteristic` and collect its `valueFlow: StateFlow<ByteArray?>`
-(it replays the last known value, unlike the push-only `notifications`).
+(it replays the last known value, which `notifications` does not).
 
 BlueZ doesn't distinguish between GATT notifications and indications
 on the wire — both collapse into `StartNotify`. Call either

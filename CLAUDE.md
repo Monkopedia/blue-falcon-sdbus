@@ -13,7 +13,15 @@ BlueZ adapter over the system D-Bus so common BLE code can run on Linux
 alongside Android and iOS.
 
 - **Targets:** `linuxX64`, `linuxArm64` (Kotlin/Native), and `jvm`
-  (JVM-on-Linux — drives BlueZ through sdbus-kotlin's JNI backend).
+  (JVM-on-Linux — drives BlueZ through sdbus-kotlin's **wire backend**: the
+  D-Bus marshalling is pure Kotlin and sdbus-kotlin ships no native code of
+  its own, but the unix-socket transport is
+  [junixsocket](https://github.com/kohlschutter/junixsocket), which **is
+  JNI** and ships its own `.so`. So: **no `libsystemd` on `jvm`** — unlike
+  the native targets, which cinterop it — but the target is **not
+  JNI-free**, and `junixsocket-core` is a runtime dependency of
+  `sdbus-kotlin-jvm`. Native-library loading failures on `jvm` surface as
+  `UnsatisfiedLinkError` from `NativeUnixSocket`, not as a D-Bus error.)
 - **Published to:** Maven Central as `com.monkopedia:blue-falcon-sdbus`.
 - **Version scheme:** `<ours>-<blue-falcon-core>` — e.g. `1.0.0-3.0.3`
   means "our 1.0.0 built against `dev.bluefalcon:blue-falcon-core:3.0.3`".
@@ -40,7 +48,9 @@ runbook; `CHANGELOG.md` follows Keep a Changelog.
 
 Use the Gradle wrapper from the repo root. **Requires JDK 17+** (CI uses
 JDK 21) and `libsystemd-dev` (Debian/Ubuntu) / `systemd` libs (Arch) on
-the build host — sdbus-kotlin links against `libsystemd`.
+the build host — the **native** targets cinterop `libsystemd`, and
+`:engine:build` always builds them. The `jvm` artifact itself does not
+need it (see Targets above).
 
 - `./gradlew :engine:build` — compiles and links both targets. This is
   the must-be-green gate; CI runs it on every push/PR to `main`.

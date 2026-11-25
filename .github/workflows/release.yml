@@ -47,6 +47,21 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # The README's compatibility table and Install coordinate are scoped to
+      # one release (see the "This table describes **x.y.z**" sentence in
+      # README.md). Their authority is the POM published for that release, so
+      # generate the very POM this run is about to upload and compare against
+      # it. Both steps run BEFORE publishing and neither carries
+      # `continue-on-error`: a wrong README fails the release rather than
+      # shipping with it.
+      - name: Generate the release POM
+        run: ./gradlew :engine:generatePomFileForJvmPublication
+
+      - name: Verify README versions against the release POM
+        run: |
+          .github/scripts/check-release-docs.sh \
+            --pom-file engine/build/publications/jvm/pom-default.xml
+
       - name: Publish to Maven Central
         env:
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}

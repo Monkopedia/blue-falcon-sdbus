@@ -106,11 +106,11 @@ internal object HarnessConnectRetry {
      * peripheral is absent.
      *
      * Matches on the message alone, where the production default also checks
-     * `error is SdbusException`. `sdbus-kotlin` is an `implementation`
-     * dependency of `:engine` and so is not on this module's test classpath;
-     * widening that just to narrow a predicate in a test harness is the worse
-     * trade. Any throwable carrying `le-connection-abort-by-local` came from
-     * BlueZ regardless of its type.
+     * `error is SdbusException`. This was written when `sdbus-kotlin` was not
+     * on this module's test classpath. It is now, for `BondState`, but the
+     * predicate is left as it was: any throwable carrying
+     * `le-connection-abort-by-local` came from BlueZ regardless of its type,
+     * and narrowing it would change retry behaviour for no gain.
      */
     suspend fun onConnectDelay(attempt: Int, error: Throwable): Duration? {
         val message = error.message ?: return null

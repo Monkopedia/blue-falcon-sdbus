@@ -25,7 +25,7 @@ class SdbusCharacteristic internal constructor(
 
     /**
      * Observes the characteristic value as a [StateFlow]. Updated by reads
-     * and, while [isNotifying] is true, by notifications/indications.
+     * and, while [isNotifying] is true, by everything [notifications] emits.
      *
      * Exposed on the concrete [SdbusCharacteristic] because the core
      * [BluetoothCharacteristic] interface has no reactive surface;
@@ -46,8 +46,13 @@ class SdbusCharacteristic internal constructor(
 
     /**
      * The core [BluetoothCharacteristic] notification stream. Emits each
-     * notification/indication value while [isNotifying]; unlike [valueFlow] it
-     * carries only push updates, not values fetched by explicit reads.
+     * notification/indication value while [isNotifying].
+     *
+     * On BlueZ it is not push-only: while [isNotifying], it also emits the
+     * value of every explicit read of this characteristic, whether made by
+     * this client or by any other process on the host. BlueZ exposes a read
+     * result and a notification as the same `Value` `PropertiesChanged`, so
+     * the engine cannot tell them apart.
      */
     override val notifications: SharedFlow<ByteArray> = _notifications.asSharedFlow()
 
@@ -64,13 +69,32 @@ class SdbusCharacteristic internal constructor(
     internal var _notifyJob: Job? = null
     override val isNotifying: Boolean get() = _isNotifying
 
+    /** Stops the notify collector and clears [isNotifying]; no D-Bus call. */
+    internal fun endNotifySession() {
+        _notifyJob?.cancel()
+        _notifyJob = null
+        _isNotifying = false
+    }
+
     private var _service: SdbusService? = null
     override val service: BluetoothService? get() = _service
 
     internal fun setService(service: SdbusService) { _service = service }
 
+    /**
+     * Adds [descriptor], ignoring a repeat of one already held. As with
+     * characteristics, identity is the D-Bus object path — a characteristic may
+     * legally carry several descriptors with the same UUID.
+     *
+     * Path-wins has the same consequence here: a repeat at a held path is
+     * dropped whatever its UUID, so a second object at a held path would keep
+     * the first UUID seen. As with characteristics that input cannot reach the
+     * guard — `resolveGattObjects` iterates a `Map` keyed by path and rebuilds
+     * its accumulator each pass — and it stops being unreachable if that state
+     * is ever made to persist.
+     */
     internal fun addDescriptor(descriptor: SdbusDescriptor) {
-        if (_descriptors.none { it.uuid == descriptor.uuid }) {
+        if (_descriptors.none { it.objectPath == descriptor.objectPath }) {
             _descriptors.add(descriptor)
         }
     }
