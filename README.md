@@ -113,8 +113,8 @@ bus connection. Not calling it on exit leaks a background thread.
 ### Observing notifications and indications
 
 Blue Falcon 3.4's `BluetoothCharacteristic` exposes a
-`notifications: SharedFlow<ByteArray>` of push updates, which the engine
-drives while the characteristic is notifying:
+`notifications: SharedFlow<ByteArray>`, which the engine drives while the
+characteristic is notifying:
 
 ```kotlin
 engine.notifyCharacteristic(device, characteristic, notify = true)
@@ -126,9 +126,14 @@ The engine-wide stream is also available as
 `engine.characteristicNotifications: SharedFlow<CharacteristicNotification>`,
 which tags each value with its peripheral and characteristic.
 
+Neither stream is push-only. While a characteristic is notifying, both also
+carry the value of every explicit read of it, whether made by this client or
+by any other process on the host, because BlueZ exposes a read result and a
+notification as the same `Value` `PropertiesChanged`.
+
 For a snapshot-style surface that also reflects explicit reads, cast to
 `SdbusCharacteristic` and collect its `valueFlow: StateFlow<ByteArray?>`
-(it replays the last known value, unlike the push-only `notifications`).
+(it replays the last known value, which `notifications` does not).
 
 BlueZ doesn't distinguish between GATT notifications and indications
 on the wire — both collapse into `StartNotify`. Call either
