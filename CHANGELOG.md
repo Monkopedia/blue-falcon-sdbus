@@ -10,6 +10,17 @@ means "our 1.0.0 built against `dev.bluefalcon:blue-falcon-core:3.0.3`".
 
 ### Fixed
 
+- `destroy()` now releases the system bus connection, as the README and KDoc
+  already said it did. It used to stop the event loop and leave the
+  connection open, so every engine an app or test suite created and
+  destroyed leaked a socket, and on the JVM two threads (the wire reader and
+  its watchdog). The destroyed engine also stayed on the bus with its
+  pairing-agent object still exported. The release runs after the event loop
+  stops, in the background job that the next engine's init waits for. A
+  second `destroy()` is now a no-op. **Behaviour change:** calls on a
+  destroyed engine that open a D-Bus proxy, such as `connect()`, now throw
+  `IllegalArgumentException("Connection has already been released")` at once.
+  Before, they kept using the connection that was meant to be shut down.
 - Notify sessions now end with their connection. The notify collector ran on
   the engine scope and `isNotifying` lived on the `SdbusCharacteristic`
   instance, and `disconnect()` reset neither. After a reconnect, re-enabling
