@@ -80,8 +80,8 @@ class SdbusEngine internal constructor(
     override val scope: CoroutineScope =
         CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    private val _peripherals = MutableStateFlow<Set<BluetoothPeripheral>>(emptySet())
-    override val peripherals: StateFlow<Set<BluetoothPeripheral>> = _peripherals.asStateFlow()
+    private val registry = PeripheralRegistry()
+    override val peripherals: StateFlow<Set<BluetoothPeripheral>> = registry.peripherals
 
     private val _managerState = MutableStateFlow(BluetoothManagerState.Ready)
     override val managerState: StateFlow<BluetoothManagerState> = _managerState.asStateFlow()
@@ -114,7 +114,6 @@ class SdbusEngine internal constructor(
     @Volatile
     private var registeredAgentManager: AgentManager1Proxy? = null
 
-    private val knownPeripherals = mutableMapOf<ObjectPath, SdbusPeripheral>()
     private val connectedDevices = mutableMapOf<ObjectPath, ConnectedDevice>()
     private var scanJob: Job? = null
 
@@ -292,8 +291,7 @@ class SdbusEngine internal constructor(
     }
 
     override fun clearPeripherals() {
-        _peripherals.value = emptySet()
-        knownPeripherals.clear()
+        registry.clear()
     }
 
     // ---- Connection ----
@@ -358,7 +356,7 @@ class SdbusEngine internal constructor(
 
     override fun retrievePeripheral(identifier: String): BluetoothPeripheral? {
         val devPath = ObjectPath("${adapterPath.value}/dev_${identifier.replace(":", "_")}")
-        return knownPeripherals[devPath]
+        return registry[devPath]
     }
 
     override fun requestConnectionPriority(
@@ -639,11 +637,11 @@ class SdbusEngine internal constructor(
     private fun handleDeviceFound(path: ObjectPath, properties: Map<PropertyName, Variant>) {
         if (!path.value.startsWith(adapterPath.value)) return
 
-        val peripheral = knownPeripherals.getOrPut(path) { SdbusPeripheral(path) }
+        val peripheral = registry.getOrCreate(path)
         properties[PropertyName("Name")]?.let { peripheral._name = it.get<String>() }
         properties[PropertyName("RSSI")]?.let { peripheral.rssi = it.get<Short>().toFloat() }
 
-        _peripherals.value = _peripherals.value + peripheral
+        registry.publish(peripheral)
     }
 
     private fun observeDeviceProperties(
