@@ -294,19 +294,77 @@ class BleIntegrationTests {
 
     // ---- Bonding ----
 
+    /**
+     * Unpairs, then bonds through the engine, then asserts on the bond itself
+     * before reading the encrypted characteristic.
+     *
+     * Unpairing happens here, once per suite run, and deliberately not in
+     * [tearDown] (owner ruling on #22: per-test unpairing is declined).
+     *
+     * All three steps are needed for this test to be able to fail on bonding:
+     *  1. **Unpair first**, so there is a bond to make rather than one
+     *     inherited from `/var/lib/bluetooth`.
+     *  2. **No catch around [SdbusEngine.createBond]**, so a throwing
+     *     `createBond` fails the test.
+     *  3. **Assert `Device1.Paired` before the encrypted read.** This is the
+     *     step that does the work. The Char G read triggers pairing on its
+     *     own through the engine's auto-accepting agent, so a `createBond`
+     *     that silently did nothing would still end in a successful read.
+     *
+     * If the run dies after the unpair, BF-Test is left unpaired. That is a
+     * valid starting state: the next run unpairs again anyway, and no other
+     * test needs the bond.
+     */
     @Test
     fun bondAndReadEncrypted(): Unit = runBlocking {
+        val bondState = BondState()
         try {
-            engine().createBond(peripheral())
-        } catch (_: Exception) {
-            // May already be bonded from a previous run
+            // Adapter1.RemoveDevice drops the device object and its keys.
+            // The settle delay is the same post-disconnect allowance tearDown
+            // makes before the next Connect().
+            engine().removeBond(peripheral())
+            delay(2000)
+
+            // The removed device object is gone, so re-discover it and connect
+            // again. scanForDevice clears the engine's peripheral cache, so this
+            // yields a fresh SdbusPeripheral rather than the stale one setUp
+            // connected.
+            val found = harness().scanForDevice(timeoutMs = 120_000L) { device ->
+                device.name == BfTestConstants.DEVICE_NAME
+            }
+            peripheral = found
+            HarnessConnectRetry.connect(engine(), found)
+            waitForServices(found, timeoutMs = 15_000L)
+
+            // Positive control on the unpair. If the device is still paired
+            // here, removeBond did not take effect and anything below would be
+            // measuring an inherited bond. A failure here is a removeBond fault,
+            // not a createBond one.
+            val pairedBefore = bondState.pairedOrNull(found)
+            assertEquals(
+                false, pairedBefore,
+                "removeBond should leave the device unpaired before createBond; " +
+                    "Device1.Paired was $pairedBefore",
+            )
+
+            engine().createBond(found)
+
+            assertTrue(
+                bondState.awaitPaired(found, timeoutMs = 10_000L),
+                "Device1.Paired must be true after createBond and before any encrypted " +
+                    "read; a bond the read could have made on its own is not evidence " +
+                    "that createBond works",
+            )
+
+            val charG = findChar(BfTestConstants.CHAR_G_ENCRYPTED)
+            engine().readCharacteristic(found, charG)
+            assertContentEquals(
+                BfTestConstants.CHAR_G_EXPECTED, charG.value,
+                "Char G should return SECURE after bonding",
+            )
+        } finally {
+            bondState.release()
         }
-        val charG = findChar(BfTestConstants.CHAR_G_ENCRYPTED)
-        engine().readCharacteristic(peripheral(), charG)
-        assertContentEquals(
-            BfTestConstants.CHAR_G_EXPECTED, charG.value,
-            "Char G should return SECURE after bonding",
-        )
     }
 
     // L2CAP CoC is not supported on BlueZ via D-Bus; SdbusEngine throws
