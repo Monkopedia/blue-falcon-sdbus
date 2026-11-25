@@ -39,6 +39,12 @@ kotlin {
         val commonTest by getting {
             dependencies {
                 implementation(kotlin("test"))
+                // bondAndReadEncrypted reads org.bluez Device1.Paired directly
+                // (see BondState): a successful encrypted read is not evidence
+                // of bonding, and SdbusEngine exposes no bond-state accessor.
+                // sdbus-kotlin is an `implementation` dependency of :engine, so
+                // it has to be named here to reach the system bus.
+                implementation(libs.sdbus.kotlin)
             }
         }
     }
