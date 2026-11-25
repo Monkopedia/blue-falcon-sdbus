@@ -101,6 +101,7 @@ class SdbusEngine internal constructor(
 
     @OptIn(ExperimentalAtomicApi::class)
     private val destroyed = AtomicBoolean(false)
+
     private val bluezService = ServiceName("org.bluez")
     private val adapterPath = ObjectPath("/org/bluez/$adapterName")
     private lateinit var adapterProxy: Adapter1Proxy
