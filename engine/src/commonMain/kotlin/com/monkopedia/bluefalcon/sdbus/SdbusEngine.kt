@@ -601,6 +601,12 @@ class SdbusEngine internal constructor(
         // than `scope` so the cancel() below doesn't kill it. The
         // connection is released last, once its event loop has stopped.
         pendingShutdown = CoroutineScope(Dispatchers.Default).launch {
+            // Init may still be running when destroy() closely follows the
+            // constructor, and it would throw on a released connection. The
+            // cancel() below stops it before it starts or at its only
+            // suspension point, the pendingShutdown join, so this can't
+            // deadlock even when the job init is joining is this one.
+            initJob.join()
             unregisterAgent()
             connection.stopEventLoop()
             connection.release()
