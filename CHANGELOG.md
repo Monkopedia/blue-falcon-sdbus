@@ -10,6 +10,19 @@ means "our 1.0.0 built against `dev.bluefalcon:blue-falcon-core:3.0.3`".
 
 ### Fixed
 
+- Notify sessions now end with their connection. The notify collector ran on
+  the engine scope and `isNotifying` lived on the `SdbusCharacteristic`
+  instance, and `disconnect()` reset neither. After a reconnect, re-enabling
+  notify on the freshly discovered characteristic emitted every notification
+  twice. Re-enabling the instance held from before the disconnect was a silent
+  no-op, because it still read `isNotifying == true`. Now `disconnect()`, a
+  superseding `connect()` and a remote `Connected=false` cancel each collector
+  and clear `isNotifying` without sending `StopNotify`. An enable whose
+  `StartNotify` is still in flight when the connection closes is ended the same
+  way. **Behaviour change:** `isNotifying` reads `false` after a disconnect, and
+  the app must re-enable notifications after reconnecting. Previously a bonded
+  device's notifications kept arriving on the stale collector after a
+  reconnect, because BlueZ keeps the session and re-arms it.
 - `stopScanning()`, `removeBond()` and `discoverServices()` now `join()` the
   engine's init job before touching the BlueZ proxies, matching `scan()` and
   `connect()`. `adapterProxy` / `objectManagerProxy` are `lateinit` and are

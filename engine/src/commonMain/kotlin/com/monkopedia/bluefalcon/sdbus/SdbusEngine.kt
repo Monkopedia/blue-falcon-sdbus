@@ -43,8 +43,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.concurrent.atomics.AtomicReference
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
 
 /**
  * Linux BlueZ engine for Blue Falcon, implemented on top of sdbus-kotlin.
@@ -100,10 +103,59 @@ class SdbusEngine internal constructor(
     private val connectedDevices = mutableMapOf<ObjectPath, ConnectedDevice>()
     private var scanJob: Job? = null
 
-    private class ConnectedDevice(
-        val proxy: Device1Proxy,
-        val observationScope: Job,
-    )
+    @OptIn(ExperimentalAtomicApi::class)
+    private inner class ConnectedDevice(val proxy: Device1Proxy) {
+        /**
+         * Parent of every coroutine tied to this connection: the property
+         * observers and each characteristic's notify collector.
+         */
+        val observationScope =
+            CoroutineScope(scope.coroutineContext + SupervisorJob(scope.coroutineContext.job))
+
+        /**
+         * Characteristics with a notify session on this connection, or null
+         * once it is closed. Swapped atomically, since both the caller's
+         * coroutine and the Connected watcher change it; compareAndSet is by
+         * identity, which matters because characteristics compare equal by path.
+         */
+        private val notifying = AtomicReference<List<SdbusCharacteristic>?>(emptyList())
+
+        /** Records [char]'s session; false if this connection has already closed. */
+        fun track(char: SdbusCharacteristic): Boolean =
+            updateNotifying { it?.plus(char) } != null
+
+        fun untrack(char: SdbusCharacteristic) {
+            updateNotifying { list -> list?.filterNot { it === char } }
+        }
+
+        /**
+         * Ends every notify session on this connection without a StopNotify
+         * round-trip. The device is gone or going, so StopNotify may fail, and
+         * a session that outlives its connection double-emits once notify is
+         * re-enabled after a reconnect, or leaves a held instance reading
+         * isNotifying == true so re-enabling it is a silent no-op.
+         */
+        fun endNotifySessions() = endNotifySessionsAndSet(emptyList())
+
+        fun close() {
+            endNotifySessionsAndSet(null)
+            observationScope.cancel()
+        }
+
+        private fun endNotifySessionsAndSet(next: List<SdbusCharacteristic>?) {
+            updateNotifying { it?.let { next } }?.forEach { it.endNotifySession() }
+        }
+
+        /** Applies [f] atomically; returns the list it replaced. */
+        private inline fun updateNotifying(
+            f: (List<SdbusCharacteristic>?) -> List<SdbusCharacteristic>?,
+        ): List<SdbusCharacteristic>? {
+            while (true) {
+                val current = notifying.load()
+                if (notifying.compareAndSet(current, f(current))) return current
+            }
+        }
+    }
 
     private val initJob = scope.launch {
         // Wait for any previous instance's event loop to fully shut down
@@ -206,11 +258,12 @@ class SdbusEngine internal constructor(
         val impl = peripheral.asSdbus()
         logger?.info("Connecting to ${impl.uuid}")
 
-        connectedDevices.remove(impl.objectPath)?.observationScope?.cancel()
+        connectedDevices.remove(impl.objectPath)?.close()
 
         val deviceProxy = Device1Proxy(createProxy(connection, bluezService, impl.objectPath))
-        val observationScope = observeDeviceProperties(impl, deviceProxy)
-        connectedDevices[impl.objectPath] = ConnectedDevice(deviceProxy, observationScope)
+        val device = ConnectedDevice(deviceProxy)
+        observeDeviceProperties(impl, device)
+        connectedDevices[impl.objectPath] = device
 
         var attempt = 0
         while (true) {
@@ -223,7 +276,7 @@ class SdbusEngine internal constructor(
                 if (retryAfter == null) {
                     // Give up: drop the observation scope we just installed so a
                     // subsequent connect() starts from a clean slate, then rethrow.
-                    connectedDevices.remove(impl.objectPath)?.observationScope?.cancel()
+                    connectedDevices.remove(impl.objectPath)?.close()
                     throw t
                 }
                 logger?.debug("connect attempt $attempt failed (${t.message}); retrying in $retryAfter")
@@ -239,7 +292,7 @@ class SdbusEngine internal constructor(
         withContext(NonCancellable) {
             try {
                 val device = connectedDevices.remove(impl.objectPath)
-                device?.observationScope?.cancel()
+                device?.close()
                 device?.proxy?.disconnect()
             } catch (e: Exception) {
                 logger?.error("Disconnect failed: ${e.message}", e)
@@ -352,8 +405,12 @@ class SdbusEngine internal constructor(
         enable: Boolean,
     ) {
         val charProxy = charProxy(char)
+        val device = connectedDevices[peripheral.asSdbus().objectPath]
         if (enable && !char.isNotifying) {
-            val job = scope.launch {
+            // Run the collector on its connection's scope so it ends with the
+            // connection. A device this engine did not connect has no
+            // connection to belong to and keeps the engine scope.
+            val job = (device?.observationScope ?: scope).launch {
                 charProxy.valueProperty.changes().collect { value ->
                     val bytes = value.toUByteArray().asByteArray()
                     char.emitNotification(bytes)
@@ -378,11 +435,15 @@ class SdbusEngine internal constructor(
             // _notifyJob and _isNotifying agree in every outcome.
             char._notifyJob = job
             char._isNotifying = true
+            // The connection may have been closed (e.g. by disconnect()) while
+            // StartNotify was in flight, cancelling the collector before this
+            // session could be tracked. End it here exactly as close() would
+            // have, without a StopNotify.
+            if (device?.track(char) == false) char.endNotifySession()
         } else if (!enable && char.isNotifying) {
             charProxy.stopNotify()
-            char._isNotifying = false
-            char._notifyJob?.cancel()
-            char._notifyJob = null
+            char.endNotifySession()
+            device?.untrack(char)
         }
     }
 
@@ -477,7 +538,7 @@ class SdbusEngine internal constructor(
         isScanning = false
         scanJob?.cancel()
         scanJob = null
-        connectedDevices.values.forEach { it.observationScope.cancel() }
+        connectedDevices.values.forEach { it.close() }
         connectedDevices.clear()
         // stopEventLoop() suspends; fire-and-forget on its own scope so
         // destroy() can return. The next engine instance awaits this.
@@ -537,8 +598,19 @@ class SdbusEngine internal constructor(
 
     private fun observeDeviceProperties(
         peripheral: SdbusPeripheral,
-        deviceProxy: Device1Proxy,
-    ): Job = scope.launch {
+        device: ConnectedDevice,
+    ) = device.observationScope.launch {
+        val deviceProxy = device.proxy
+        launch {
+            // The engine scopes a notify session to one connection, as on
+            // Android and iOS, so a remote disconnect ends ours and the app
+            // re-enables after reconnecting. This is the engine's choice, not
+            // BlueZ's: BlueZ keeps its sessions across a disconnect and re-arms
+            // them on reconnect.
+            deviceProxy.connectedProperty.changes().collect { connected ->
+                if (!connected) device.endNotifySessions()
+            }
+        }
         launch {
             deviceProxy.servicesResolvedProperty.changes().collect { resolved ->
                 if (resolved && autoDiscoverAllServicesAndCharacteristics) {
