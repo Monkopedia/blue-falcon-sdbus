@@ -34,6 +34,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -243,6 +244,11 @@ class SdbusEngine internal constructor(
 
     override suspend fun scan(filters: List<ServiceFilter>) {
         initJob.join()
+        // A second scan() replaces the first: its loop is stopped here, or it
+        // would outlive stopScanning(), which only cancels the newest one.
+        // Join before setting isScanning, because the old loop clears the
+        // flag as it ends.
+        scanJob?.cancelAndJoin()
         logger?.info("Scan started with filters: $filters")
         isScanning = true
 
