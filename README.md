@@ -98,9 +98,12 @@ suspend fun main() {
     engine.connect(device)
     engine.discoverServices(device)
 
-    val deviceName = device.characteristics.first { it.uuid == "2a00".toUuid() }
-    engine.readCharacteristic(device, deviceName)
-    println("Device name from GATT: ${deviceName.value?.decodeToString()}")
+    // Your peripheral's characteristic (placeholder vendor UUID).
+    val characteristic = device.characteristics.first {
+        it.uuid == "12345678-1234-5678-1234-56789abcdef0".toUuid()
+    }
+    engine.readCharacteristic(device, characteristic)
+    println("Read from GATT: ${characteristic.value?.decodeToString()}")
 
     engine.disconnect(device)
     engine.destroy()
@@ -109,6 +112,12 @@ suspend fun main() {
 
 `destroy()` shuts down the D-Bus event loop and releases the system
 bus connection. Not calling it on exit leaks a background thread.
+
+On BlueZ < 5.80, services claimed by BlueZ's own plugins (GAP, Battery,
+Device Information, HID…) aren't exported over D-Bus, so they aren't
+visible through the engine. BlueZ 5.80 added the `[GATT]
+ExportClaimedServices` option in `main.conf`, which exports them read-only
+by default.
 
 ### Observing notifications and indications
 
